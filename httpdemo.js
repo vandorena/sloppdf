@@ -13,15 +13,15 @@
 
 var RELAY_URL = "__relay_url__";
 
-//generation time is very variable - measured between 16 and 180+ seconds for the
-//same prompt, because the model's reasoning length swings wildly. the limit has
-//to cover the slow tail or it abandons jobs that were about to succeed.
+//the default model takes 13-20s, but a reasoning model swapped in via
+//HACKCLUB_AI_MODEL can take three minutes. the limit covers that slow tail rather
+//than abandoning jobs that were about to succeed.
 var POLL_INTERVAL = 4000; //ms between polls
 var POLL_LIMIT = 75;      //75 * 4s = 5 minutes
 
-//at document level `this` is the Doc, so capture it here. note that pdflinux.js
-//reaches fields via globalThis.getField() - that works in pdfium but not in
-//acrobat, where getField is a Doc method rather than a global.
+//at document level `this` is the Doc, so capture it here. note that upstream
+//linuxpdf reaches fields via globalThis.getField(), which works in pdfium but
+//not in acrobat, where getField is a Doc method rather than a global.
 var DOC = this;
 
 //"HTML" (urlencoded) or "FDF" (acrobat's default). both are wired up so we can

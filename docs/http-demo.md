@@ -66,27 +66,28 @@ random entropy token. The token exists because the prompt asks the model to be
 random, and because it stops any layer in between from serving a cached
 completion.
 
-## The model, and the reasoning-token trap
+## The model, and two traps
 
-The default is `~deepseek/deepseek-v4-flash-latest`. **The leading `~` is part of
-the model ID** — it marks a floating alias on the proxy. Without it you get
+The default is **`qwen/qwen3-32b`**, in both relays. Measured at 13–20 seconds
+per story. Speed is the reason for the choice, not quality: a Vercel Hobby
+function is killed at 60s and `waitUntil` work dies with it, so anything slower
+leaves jobs that never finish.
+
+**Reasoning models are a trap here.** `~deepseek/deepseek-v4-flash-latest` and
+friends burn 300–900 tokens thinking before writing a single word, and take
+anywhere from 16 seconds to over three minutes for the same prompt. If
+`max_tokens` does not cover the thinking as well as the story, the API returns
+`finish_reason: "length"` with **`content: null`** — no story, no error, nothing.
+`MAX_TOKENS` defaults to 3000 rather than the ~500 a 300-word story needs, and
+both relays raise a message naming this cause instead of failing on a null.
+
+**The leading `~` is part of the model ID**, not a typo — it marks a floating
+alias on the proxy. `deepseek/deepseek-v4-flash-latest` without it returns
 `is not a valid model ID`.
 
-It is a reasoning model, and that matters: it burns roughly 300–900 tokens
-thinking before it writes a single word of story. If `max_tokens` does not cover
-both, the API returns `finish_reason: "length"` with **`content: null`** — no
-story, no error, nothing. That is why `MAX_TOKENS` defaults to 3000 rather than
-the ~500 a 300-word story would suggest, and why the relay raises a message
-naming the cause instead of failing on a null.
-
-Generation time is **very** variable — measured between 16 seconds and over three
-minutes for the same prompt, because the reasoning length swings. That is why
-`POLL_LIMIT` in `httpdemo.js` covers five minutes; a shorter limit abandons jobs
-that were about to succeed.
-
-Override with `HACKCLUB_AI_MAX_TOKENS` or `HACKCLUB_AI_MODEL` in `.env`. Passing
-`reasoning: {"effort": "low"}` to the API cuts latency, but is proxy-specific and
-would break a swapped-in model, so it is not used by default.
+Override with `HACKCLUB_AI_MODEL` or `HACKCLUB_AI_MAX_TOKENS`. `POLL_LIMIT` in
+`httpdemo.js` covers five minutes, so a slow model still works against the local
+Python relay, which has no time ceiling — just not on Vercel Hobby.
 
 ## Setup
 
@@ -129,10 +130,6 @@ The relay logs each parsed submission, which tells you what Acrobat actually
 sent.
 
 ## Deploying
-
-```sh
-npx wrangler pages secret put HACKCLUB_AI_KEY
-```
 
 Deployed on **Vercel** at `https://slop.alexvd.dev`.
 
@@ -183,12 +180,9 @@ default model (`qwen/qwen3-32b`, measured 13–20s) and `JOB_DEADLINE = 55`, whi
 reports a clear error rather than letting the PDF poll for five minutes. A
 reasoning model here would take 15–180s and fail unpredictably.
 
-### Note on the old Cloudflare setup
-
-`.github/workflows/deploy.yaml` still publishes `out/` to Cloudflare Pages on
-every push to `main`. That is the `linux.pdf` site and is untouched by this — but
-if the whole project is moving to Vercel, it should be removed or disabled, or
-you will have two deployments racing for the same domain.
+Vercel's production branch defaults to the repository's default branch. Make sure
+that is the branch this code actually lives on, or the deploy will serve nothing
+and `/api/story` will 404.
 
 ## Notes and gotchas
 
@@ -232,9 +226,9 @@ then refuses to submit the form at all, with:
 
 > At least one required field was empty.
 
-This is easy to miss because Chrome ignores it entirely — `gen_pdf.py` shipped
-`Ff = 2` on all 310 of `linux.pdf`'s fields and nothing ever complained, since
-that document never submits. Use the `FF_*` constants in `gen_pdf.py`; nothing
+This is easy to miss because Chrome ignores it entirely — upstream linuxpdf set
+`Ff = 2` on all 310 of its fields and nothing ever complained, since that
+document never submits a form. Use the `FF_*` constants in `pdfform.py`; nothing
 should ever set `FF_REQUIRED`.
 
 Note also that the fields the FDF reply writes into are left **writable**. Not
@@ -258,10 +252,10 @@ output for backslashes, parens, LF, CRLF, non-ASCII and astral-plane characters.
 
 ## AcroForm prerequisite
 
-`gen_pdf.py` originally emitted no `/AcroForm` dictionary. Chrome tolerates that
+Upstream linuxpdf emitted no `/AcroForm` dictionary. Chrome tolerates that
 and scavenges widgets off the page's `/Annots`; Acrobat resolves `getField()`
 names **only** through `/AcroForm /Fields`, so every field was invisible to
-JavaScript there. `attach_acroform()` fixes this, and `linux.pdf` gets it too.
+JavaScript there. `attach_acroform()` in `pdfform.py` fixes it.
 
 Three things that bite when doing this with pdfrw:
 
@@ -273,6 +267,6 @@ Three things that bite when doing this with pdfrw:
   both `/Annots` and `/Fields` (a `log.warning` only), producing two widgets
   sharing one name.
 
-Also note that `pdflinux.js` reaches fields via `globalThis.getField()`. That
-works in PDFium but not in Acrobat, where `getField` is a `Doc` method — hence
-`var DOC = this;` at the top of `httpdemo.js`.
+Note also that upstream linuxpdf reaches fields via `globalThis.getField()`.
+That works in PDFium but not in Acrobat, where `getField` is a `Doc` method —
+hence `var DOC = this;` at the top of `httpdemo.js`.
