@@ -53,12 +53,17 @@ ENV_PATH = pathlib.Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(ENV_PATH)
 
 AI_URL = os.environ.get("HACKCLUB_AI_URL", "https://ai.hackclub.com/proxy/v1/chat/completions")
-#the leading ~ is part of the model id on this proxy - it marks a floating alias.
-#without it the proxy returns "is not a valid model ID".
-AI_MODEL = os.environ.get("HACKCLUB_AI_MODEL", "~deepseek/deepseek-v4-flash-latest")
+#a fast non-reasoning model, matching api/story.js so local testing behaves like
+#production. the reasoning models this proxy offers take 15-180s, which a vercel
+#hobby function cannot outlive.
+#
+#if you switch to one, note that the leading ~ in an id like
+#"~deepseek/deepseek-v4-flash-latest" is part of the id - it marks a floating
+#alias, and without it the proxy returns "is not a valid model ID".
+AI_MODEL = os.environ.get("HACKCLUB_AI_MODEL", "qwen/qwen3-32b")
 AI_KEY = os.environ.get("HACKCLUB_AI_KEY", "")
 
-#keep in sync with functions/api/story.js
+#keep in sync with api/story.js
 BASE_PROMPT = (
   "Think of something you haven't thought of before. Try your best to be random. "
   "Try to decide if your text is like the number 7 or not. Then decide a story. "
@@ -73,96 +78,20 @@ MAX_TOPIC_LEN = 200
 #first the api returns finish_reason=length with content=null - no story at all.
 MAX_TOKENS = int(os.environ.get("HACKCLUB_AI_MAX_TOKENS", "3000"))
 
-CROSSDOMAIN = b"""<?xml version="1.0"?>
-<cross-domain-policy>
-  <site-control permitted-cross-domain-policies="all"/>
-  <allow-access-from domain="*"/>
-  <allow-http-request-headers-from domain="*" headers="*"/>
-</cross-domain-policy>
-"""
+#the same files vercel serves statically from public/ - read off disk so there is
+#a single source of truth for the landing page and the policy file, and so a pdf
+#rebuild is picked up without restarting the relay.
+PUBLIC_DIR = pathlib.Path(__file__).resolve().parent.parent / "public"
 
-#a static landing page - a download link and an explanation, no javascript. the
-#pdf itself is the interactive part; this is just how you get it.
-INDEX = b"""<!doctype html>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sloppdf - a PDF that writes stories</title>
-<style>
-  body { font: 16px/1.6 Georgia, serif; max-width: 40rem; margin: 0 auto;
-         padding: 3rem 1.25rem 5rem; background: #fbfaf7; color: #23231f; }
-  h1 { font-size: 1.6rem; margin-bottom: .25rem; }
-  .sub { color: #6b6b63; font-style: italic; margin-top: 0; }
-  h2 { font-size: 1.05rem; margin-top: 2.25rem; }
-  a.dl { display: inline-block; margin: 1.5rem 0; padding: .7rem 1.3rem;
-         background: #23231f; color: #fbfaf7; text-decoration: none;
-         border-radius: 4px; font-family: system-ui, sans-serif;
-         font-size: .95rem; }
-  code { background: #efeee9; padding: .1em .35em; border-radius: 3px;
-         font-size: .85em; }
-  .warn { border-left: 3px solid #c2410c; padding: .5rem 0 .5rem .9rem;
-          background: #fdf4ee; }
-  ol { padding-left: 1.3rem; }
-  li { margin: .4rem 0; }
-  footer { margin-top: 3rem; color: #6b6b63; font-size: .85rem; }
-</style>
-
-<h1>sloppdf</h1>
-<p class="sub">A PDF file that asks a language model for a story, over the
-internet, while you are reading it.</p>
-
-<a class="dl" href="/http_demo.pdf">Download the PDF</a>
-
-<p class="warn"><strong>Open it in Adobe Acrobat or Acrobat Reader.</strong>
-It will not work in Chrome, Firefox, Edge, or Preview &mdash; their PDF viewers
-implement no networking at all.</p>
-
-<h2>How it works</h2>
-
-<p>PDF files can contain JavaScript. Acrobat gives that JavaScript exactly one way
-to reach the network: <code>Doc.submitForm()</code>, which posts the form's fields
-to a URL. The trick is the reply &mdash; if the server answers with an
-<code>application/vnd.fdf</code> document, Acrobat parses it and writes the values
-straight back into the form's fields. That is the return channel.</p>
-
-<ol>
-  <li>You type an optional topic and click <em>Generate</em>.</li>
-  <li>The PDF posts that topic to a small relay server.</li>
-  <li>The relay asks the model for a story, and immediately replies with a job
-      number &mdash; not the story.</li>
-  <li>The PDF re-submits every few seconds asking whether that job is done.</li>
-  <li>When it is, the relay sends the story back as FDF, and the text appears in
-      the page you are looking at.</li>
-</ol>
-
-<h2>Why the relay exists</h2>
-
-<p>Two reasons, both unavoidable.</p>
-
-<p><strong>The API key.</strong> Anyone who opens a PDF can read every byte of it,
-so a key stored inside the document is a published key. The relay holds it
-instead.</p>
-
-<p><strong>Acrobat will not wait.</strong> A story takes anywhere from 15 seconds
-to three minutes to write. Acrobat drops a <code>submitForm</code> connection
-long before that, and the reply is simply lost. So the relay never makes the PDF
-wait: it hands back a job number in milliseconds and lets the document poll.</p>
-
-<h2>Caveats</h2>
-
-<p>Acrobat will ask once whether to allow the document to contact the relay.
-That is its cross-domain check &mdash; a PDF opened from your disk has no origin
-of its own, so every response counts as cross-domain. Choose <em>Allow</em>.</p>
-
-<p>The window freezes for a moment on each poll, because <code>submitForm</code>
-blocks the interface. The status line counts the seconds so you can tell it is
-still working.</p>
-
-<footer>Built on <a href="https://github.com/ading2210/linuxpdf">linuxpdf</a> by
-ading2210, which runs an entire RISC-V Linux emulator in a PDF the same way.</footer>
-"""
-
-#serve the built pdf straight off disk so a rebuild is picked up without a restart
-PDF_PATH = pathlib.Path(__file__).resolve().parent.parent / "out" / "http_demo.pdf"
+#(name, content type) for every static route this relay serves
+STATIC_ROUTES = {
+  "/": ("index.html", "text/html; charset=utf-8"),
+  "/index.html": ("index.html", "text/html; charset=utf-8"),
+  #adobe checks the content type on a policy file, so it is stated explicitly
+  #here and in vercel.json rather than left to the server's guess
+  "/crossdomain.xml": ("crossdomain.xml", "text/x-cross-domain-policy"),
+  "/http_demo.pdf": ("http_demo.pdf", "application/pdf"),
+}
 
 #escape a python string so it is a valid pdf literal string. the backslash must
 #be replaced first, otherwise it doubles the escapes added afterwards.
@@ -350,18 +279,20 @@ class Handler(BaseHTTPRequestHandler):
 
   def do_GET(self):
     path = self.path.split("?")[0]
-    if path == "/crossdomain.xml":
-      self._send(200, CROSSDOMAIN, "text/x-cross-domain-policy")
-    elif path in ("/", "/index.html"):
-      self._send(200, INDEX, "text/html; charset=utf-8")
-    elif path == "/http_demo.pdf":
-      if PDF_PATH.is_file():
-        self._send(200, PDF_PATH.read_bytes(), "application/pdf")
-      else:
-        self._send(404, b"http_demo.pdf has not been built yet - run "
-                        b"gen_http_pdf.py\n", "text/plain")
-    else:
+    route = STATIC_ROUTES.get(path)
+
+    if route is None:
       self._send(404, b"not found\n", "text/plain")
+      return
+
+    name, content_type = route
+    target = PUBLIC_DIR / name
+    if target.is_file():
+      self._send(200, target.read_bytes(), content_type)
+    else:
+      self._send(404, f"public/{name} is missing. for the pdf, run:\n"
+                      f"  python gen_http_pdf.py public/http_demo.pdf local\n"
+                      .encode("utf-8"), "text/plain")
 
   def do_POST(self):
     if self.path.split("#")[0].split("?")[0] != "/api/story":

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/story.js": {
+      "maxDuration": 60
+    }
+  },
+  "headers": [
+    {
+      "source": "/crossdomain.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/x-cross-domain-policy"
+        }
+      ]
+    }
+  ]
+}

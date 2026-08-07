@@ -14,3 +14,6 @@ __pycache__/
 # secrets - the relay's api key
 .env
 .dev.vars
+# node / vercel
+node_modules/
+.vercel/

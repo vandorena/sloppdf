@@ -14,10 +14,18 @@ from pdfrw.objects.pdfarray import PdfArray
 from gen_pdf import (create_page, create_field, create_button, create_script,
                      create_text, attach_acroform)
 
-#127.0.0.1 rather than localhost on purpose: "localhost" resolves to ::1 first on
+#the deployed relay. the pdf has to be built against wherever it will actually
+#run: a pdf opened from disk has no origin of its own, so acrobat treats every
+#reply as cross domain and will only accept one from a host that serves a
+#permissive crossdomain.xml (see web/crossdomain.xml).
+DEFAULT_RELAY = "https://slop.alexvd.dev/api/story"
+
+#for local testing, pass the dev relay explicitly:
+#  gen_http_pdf.py out/http_demo.pdf http://127.0.0.1:8000/api/story
+#use 127.0.0.1 rather than localhost - "localhost" resolves to ::1 first on
 #windows, and with the dev relay bound to ipv4 only that costs a ~2 second
 #fallback on every single request. the literal address answers in ~3ms.
-DEFAULT_RELAY = "http://127.0.0.1:8000/api/story"
+LOCAL_RELAY = "http://127.0.0.1:8000/api/story"
 
 def create_action_button(name, x, y, width, height, caption, js):
   button = create_button(name, x, y, width, height, caption)
@@ -32,6 +40,9 @@ def create_submit_button(name, x, y, width, height, caption, submit_as):
 if __name__ == "__main__":
   out_path = sys.argv[1]
   relay_url = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_RELAY
+  #shorthand so testing against the dev relay does not mean retyping the url
+  if relay_url == "local":
+    relay_url = LOCAL_RELAY
 
   js = pathlib.Path("httpdemo.js").read_text()
   js = js.replace("__relay_url__", relay_url)

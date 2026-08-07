@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- A pdf opened from the local filesystem has no origin, so acrobat treats
+     every response as cross domain and blocks it unless the target host serves
+     a policy that permits it. Adobe's alternative for domain-less files is to
+     register a certification signature fingerprint here, which would require
+     certifying the pdf.
+
+     This is adobe's "least restrictive" policy and is only acceptable because
+     this origin serves a static demo page and one story relay - no cookies,
+     no auth, no user data of any kind. Revisit before hosting anything
+     authenticated on this domain. -->
+<cross-domain-policy>
+  <site-control permitted-cross-domain-policies="all"/>
+  <allow-access-from domain="*"/>
+  <allow-http-request-headers-from domain="*" headers="*"/>
+</cross-domain-policy>

@@ -102,20 +102,28 @@ one-off overrides still work.
 # terminal 1 - the relay
 .venv/Scripts/python.exe tools/dev_relay.py 8000
 
-# terminal 2 - build the pdf pointed at it
-.venv/Scripts/python.exe gen_http_pdf.py out/http_demo.pdf http://localhost:8000/api/story
+# terminal 2 - a pdf pointed at it. note out/, not public/
+.venv/Scripts/python.exe gen_http_pdf.py out/http_demo.pdf local
 ```
 
-Then either open `out/http_demo.pdf` directly, or visit
-<http://127.0.0.1:8000/> — the relay serves a static landing page with a download
-link and an explanation of the mechanism.
+Open **`out/http_demo.pdf`** in Acrobat (not a browser), optionally type a topic,
+and click *Generate (HTML)*. Acrobat may ask once whether to allow the document to
+contact the host — choose **Allow** and tick *Remember my action for this site*.
 
-Open the PDF **in Acrobat** (not a browser), optionally type a topic, and click
-*Generate (HTML)*. Acrobat may ask once whether to allow the document to contact
-the host — choose **Allow** and tick *Remember my action for this site*.
+Keep the two builds straight:
 
-Routes: `/` (landing page), `/http_demo.pdf` (the built PDF, re-read off disk each
-request so a rebuild needs no restart), `/crossdomain.xml`, `POST /api/story`.
+| File | Relay | Purpose |
+|------|-------|---------|
+| `public/http_demo.pdf` | `https://slop.alexvd.dev/api/story` | committed, deployed |
+| `out/http_demo.pdf` | `http://127.0.0.1:8000/api/story` | local testing, gitignored |
+
+The relay serves the same `public/` directory Vercel does, so
+<http://127.0.0.1:8000/> shows the real landing page. Its download link therefore
+hands you the *production* PDF, which will not talk to your local relay — for
+local testing open `out/http_demo.pdf` from disk instead.
+
+Routes: `/`, `/http_demo.pdf`, `/crossdomain.xml`, `POST /api/story`. Static files
+are read off disk per request, so a rebuild needs no restart.
 
 The relay logs each parsed submission, which tells you what Acrobat actually
 sent.
@@ -126,14 +134,61 @@ sent.
 npx wrangler pages secret put HACKCLUB_AI_KEY
 ```
 
-`build.sh` builds the demo against `$RELAY_URL` (default
-`https://linuxpdf.pages.dev/api/story`) and copies `functions/` into `out/`, where
-Cloudflare Pages picks it up. `web/crossdomain.xml` reaches the origin root via
-the existing `cp web/* out`.
+Deployed on **Vercel** at `https://slop.alexvd.dev`.
 
-The policy file is required, not optional: a PDF opened from disk has **no
-origin**, so Acrobat treats every response as cross-domain and drops it unless
-the target host explicitly permits it.
+| Path | What |
+|------|------|
+| `api/story.js` | the serverless relay |
+| `public/index.html` | landing page |
+| `public/crossdomain.xml` | Adobe's policy file (required — see below) |
+| `public/http_demo.pdf` | the built PDF, **committed** so Vercel can serve it |
+| `vercel.json` | `maxDuration` and the policy file's Content-Type |
+
+Setup:
+
+1. Add the **Upstash Redis** (or Vercel KV) integration to the project. It sets
+   `KV_REST_API_URL`/`KV_REST_API_TOKEN`; the code also accepts the
+   `UPSTASH_REDIS_REST_URL`/`_TOKEN` pair.
+2. Set `HACKCLUB_AI_KEY` in the project's environment variables.
+3. Point `slop.alexvd.dev` at the project.
+
+Rebuild the PDF after any change to `httpdemo.js` or `gen_http_pdf.py`, and commit
+it — it is a build artifact, but Vercel deploys from git and has no Python
+toolchain here:
+
+```sh
+.venv/Scripts/python.exe gen_http_pdf.py public/http_demo.pdf
+```
+
+**The PDF must be built against the host it will actually talk to.** The URL is
+baked in at generation time, so one built with `local` will keep trying
+`127.0.0.1` on whoever opens it.
+
+### Two things that will silently break it
+
+**`/crossdomain.xml` must be served, with the right Content-Type.** A PDF opened
+from disk has **no origin**, so Acrobat treats every response as cross-domain and
+drops it unless the host explicitly permits it. Vercel would serve `.xml` as
+`application/xml`; Adobe expects `text/x-cross-domain-policy`, which is why
+`vercel.json` sets it. Verify after deploying:
+
+```sh
+curl -i https://slop.alexvd.dev/crossdomain.xml
+```
+
+**Generation must finish inside the function's time limit.** Vercel Hobby caps an
+invocation at 60s, and `waitUntil` work dies with the function — so a generation
+slower than that leaves a job that never completes. Hence the fast non-reasoning
+default model (`qwen/qwen3-32b`, measured 13–20s) and `JOB_DEADLINE = 55`, which
+reports a clear error rather than letting the PDF poll for five minutes. A
+reasoning model here would take 15–180s and fail unpredictably.
+
+### Note on the old Cloudflare setup
+
+`.github/workflows/deploy.yaml` still publishes `out/` to Cloudflare Pages on
+every push to `main`. That is the `linux.pdf` site and is untouched by this — but
+if the whole project is moving to Vercel, it should be removed or disabled, or
+you will have two deployments racing for the same domain.
 
 ## Notes and gotchas
 
