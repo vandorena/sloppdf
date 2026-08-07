@@ -1,7 +1,7 @@
 #builds the pdf that makes a live http request via doc.submitForm().
 #
-#  .venv\Scripts\python.exe gen_http_pdf.py public/http_demo.pdf        (deployed)
-#  .venv\Scripts\python.exe gen_http_pdf.py out/http_demo.pdf local     (dev relay)
+#  .venv\Scripts\python.exe gen_http_pdf.py public/slop.pdf        (deployed)
+#  .venv\Scripts\python.exe gen_http_pdf.py out/slop.pdf local     (dev relay)
 
 import sys
 import pathlib
@@ -21,7 +21,7 @@ from pdfform import (create_page, create_field, create_button, create_script,
 DEFAULT_RELAY = "https://slop.alexvd.dev/api/story"
 
 #for local testing, pass the dev relay explicitly:
-#  gen_http_pdf.py out/http_demo.pdf http://127.0.0.1:8000/api/story
+#  gen_http_pdf.py out/slop.pdf http://127.0.0.1:8000/api/story
 #use 127.0.0.1 rather than localhost - "localhost" resolves to ::1 first on
 #windows, and with the dev relay bound to ipv4 only that costs a ~2 second
 #fallback on every single request. the literal address answers in ~3ms.

@@ -1,11 +1,11 @@
-#local development relay for http_demo.pdf - stdlib only, no dependencies.
+#local development relay for slop.pdf - stdlib only, no dependencies.
 #
 #  cp .env.example .env   and put your key in it
 #  python tools/dev_relay.py [port]
 #
 #serves four routes:
 #  GET  /                 - a static landing page: download link and explanation.
-#  GET  /http_demo.pdf    - the built pdf, read off disk on each request.
+#  GET  /slop.pdf         - the built pdf, read off disk on each request.
 #  GET  /crossdomain.xml  - adobe's cross domain policy. a pdf opened from disk
 #                           has no origin, so acrobat treats every response as
 #                           cross domain and refuses it without this.
@@ -90,7 +90,7 @@ STATIC_ROUTES = {
   #adobe checks the content type on a policy file, so it is stated explicitly
   #here and in vercel.json rather than left to the server's guess
   "/crossdomain.xml": ("crossdomain.xml", "text/x-cross-domain-policy"),
-  "/http_demo.pdf": ("http_demo.pdf", "application/pdf"),
+  "/slop.pdf": ("slop.pdf", "application/pdf"),
 }
 
 #escape a python string so it is a valid pdf literal string. the backslash must
@@ -291,7 +291,7 @@ class Handler(BaseHTTPRequestHandler):
       self._send(200, target.read_bytes(), content_type)
     else:
       self._send(404, f"public/{name} is missing. for the pdf, run:\n"
-                      f"  python gen_http_pdf.py public/http_demo.pdf local\n"
+                      f"  python gen_http_pdf.py public/slop.pdf local\n"
                       .encode("utf-8"), "text/plain")
 
   def do_POST(self):

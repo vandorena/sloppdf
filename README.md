@@ -15,7 +15,7 @@ URL. The trick is the reply — if the server answers with an
 back into the form's fields. That is the return channel.
 
 ```
-http_demo.pdf                              relay (holds the api key)
+slop.pdf                                   relay (holds the api key)
   [topic: ....... (optional)]
   [Generate] ──POST─────────▶ /api/story ──┬─ starts job, replies in ms
              ◀── job id + WORKING ─────────┘        │
@@ -53,10 +53,10 @@ python3 -m venv .venv
 cp .env.example .env      # add your HACKCLUB_AI_KEY
 
 .venv/Scripts/python.exe tools/dev_relay.py 8000
-.venv/Scripts/python.exe gen_http_pdf.py out/http_demo.pdf local
+.venv/Scripts/python.exe gen_http_pdf.py out/slop.pdf local
 ```
 
-Then open `out/http_demo.pdf` in Acrobat. Full detail, including the deployment
+Then open `out/slop.pdf` in Acrobat. Full detail, including the deployment
 setup and a list of the things that silently break this, is in
 [docs/http-demo.md](docs/http-demo.md).
 
