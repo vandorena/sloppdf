@@ -1,4 +1,4 @@
-# http_demo.pdf — a story, written live, from inside a PDF
+# slop.pdf — a story, written live, from inside a PDF
 
 A standalone PDF that calls a language model over the network and displays the
 result, in Adobe Acrobat. No folder-level scripts, no certificates, nothing to
@@ -11,7 +11,7 @@ only the relay's upstream changed.)
 ## How it works
 
 ```
-http_demo.pdf                              relay (holds the api key)
+slop.pdf                                   relay (holds the api key)
   [topic: ....... (optional)]
   [Generate] ──POST─────────▶ /api/story ──┬─ starts job, replies in ms
              ◀── job id + WORKING ─────────┘        │
@@ -104,10 +104,10 @@ one-off overrides still work.
 .venv/Scripts/python.exe tools/dev_relay.py 8000
 
 # terminal 2 - a pdf pointed at it. note out/, not public/
-.venv/Scripts/python.exe gen_http_pdf.py out/http_demo.pdf local
+.venv/Scripts/python.exe gen_http_pdf.py out/slop.pdf local
 ```
 
-Open **`out/http_demo.pdf`** in Acrobat (not a browser), optionally type a topic,
+Open **`out/slop.pdf`** in Acrobat (not a browser), optionally type a topic,
 and click *Generate (HTML)*. Acrobat may ask once whether to allow the document to
 contact the host — choose **Allow** and tick *Remember my action for this site*.
 
@@ -115,15 +115,15 @@ Keep the two builds straight:
 
 | File | Relay | Purpose |
 |------|-------|---------|
-| `public/http_demo.pdf` | `https://slop.alexvd.dev/api/story` | committed, deployed |
-| `out/http_demo.pdf` | `http://127.0.0.1:8000/api/story` | local testing, gitignored |
+| `public/slop.pdf` | `https://slop.alexvd.dev/api/story` | committed, deployed |
+| `out/slop.pdf` | `http://127.0.0.1:8000/api/story` | local testing, gitignored |
 
 The relay serves the same `public/` directory Vercel does, so
 <http://127.0.0.1:8000/> shows the real landing page. Its download link therefore
 hands you the *production* PDF, which will not talk to your local relay — for
-local testing open `out/http_demo.pdf` from disk instead.
+local testing open `out/slop.pdf` from disk instead.
 
-Routes: `/`, `/http_demo.pdf`, `/crossdomain.xml`, `POST /api/story`. Static files
+Routes: `/`, `/slop.pdf`, `/crossdomain.xml`, `POST /api/story`. Static files
 are read off disk per request, so a rebuild needs no restart.
 
 The relay logs each parsed submission, which tells you what Acrobat actually
@@ -138,7 +138,7 @@ Deployed on **Vercel** at `https://slop.alexvd.dev`.
 | `api/story.js` | the serverless relay |
 | `public/index.html` | landing page |
 | `public/crossdomain.xml` | Adobe's policy file (required — see below) |
-| `public/http_demo.pdf` | the built PDF, **committed** so Vercel can serve it |
+| `public/slop.pdf` | the built PDF, **committed** so Vercel can serve it |
 | `vercel.json` | `maxDuration` and the policy file's Content-Type |
 
 Setup:
@@ -154,7 +154,7 @@ it — it is a build artifact, but Vercel deploys from git and has no Python
 toolchain here:
 
 ```sh
-.venv/Scripts/python.exe gen_http_pdf.py public/http_demo.pdf
+.venv/Scripts/python.exe gen_http_pdf.py public/slop.pdf
 ```
 
 **The PDF must be built against the host it will actually talk to.** The URL is

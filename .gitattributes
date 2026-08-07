@@ -1,0 +1,8 @@
+# Normalise to LF. Without this, editing on Windows silently rewrites whole files
+# to CRLF and a two line change shows up as a 660 line diff.
+* text=auto eol=lf
+
+# Never touch these - line ending conversion would corrupt them.
+*.pdf binary
+*.ico binary
+*.png binary

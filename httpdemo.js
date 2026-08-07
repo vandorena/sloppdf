@@ -1,4 +1,4 @@
-//document level javascript for http_demo.pdf
+//document level javascript for slop.pdf
 //this makes a live http request from inside the pdf using doc.submitForm(),
 //which - unlike Net.HTTP.request - is not security restricted and works in the
 //free reader outside of a browser. the relay posts to /api/story, which asks the
@@ -6,7 +6,7 @@
 //fields. the api key lives on the relay - never in this document, which anyone
 //who opens the pdf can read in full.
 //
-//the model takes 15-180 seconds, and acrobat will not hold a submitForm
+//generation takes seconds, and acrobat will not hold a submitForm
 //connection open that long - it drops the socket and the reply is lost. so the
 //relay answers immediately with a job id, and this script re-submits with that
 //id until the job reports done. each individual request is fast.
