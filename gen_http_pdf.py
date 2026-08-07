@@ -1,7 +1,7 @@
-#builds a standalone pdf that makes a live http request via doc.submitForm().
-#unlike gen_pdf.py this needs no emscripten build - just pdfrw - so it runs on
-#windows directly:
-#  .venv\Scripts\python.exe gen_http_pdf.py out\http_demo.pdf
+#builds the pdf that makes a live http request via doc.submitForm().
+#
+#  .venv\Scripts\python.exe gen_http_pdf.py public/http_demo.pdf        (deployed)
+#  .venv\Scripts\python.exe gen_http_pdf.py out/http_demo.pdf local     (dev relay)
 
 import sys
 import pathlib
@@ -11,13 +11,13 @@ from pdfrw.objects.pdfname import PdfName
 from pdfrw.objects.pdfdict import PdfDict
 from pdfrw.objects.pdfarray import PdfArray
 
-from gen_pdf import (create_page, create_field, create_button, create_script,
+from pdfform import (create_page, create_field, create_button, create_script,
                      create_text, attach_acroform)
 
 #the deployed relay. the pdf has to be built against wherever it will actually
 #run: a pdf opened from disk has no origin of its own, so acrobat treats every
 #reply as cross domain and will only accept one from a host that serves a
-#permissive crossdomain.xml (see web/crossdomain.xml).
+#permissive crossdomain.xml (see public/crossdomain.xml).
 DEFAULT_RELAY = "https://slop.alexvd.dev/api/story"
 
 #for local testing, pass the dev relay explicitly:
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     #every field here is left writable on purpose. read only would be tidier, but
     #these are the fields the relay's fdf reply writes into, and it removes any
     #chance the flag interferes with the import. it also lets you select and copy
-    #the story out. nothing may be marked Required - see FF_REQUIRED in gen_pdf.py.
+    #the story out. nothing may be marked Required - see FF_REQUIRED in pdfform.py.
     create_field("topic", 100, 500, 200, 16, "", readonly=False),
     create_field("status", 100, 470, 480, 16, "Loading...", readonly=False),
     #carries the relay's job id between polls. kept visible because when this

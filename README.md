@@ -1,55 +1,85 @@
-# LinuxPDF
+# sloppdf
 
-This is Linux running inside a PDF file via a RISC-V emulator, which is based on [TinyEMU](https://bellard.org/tinyemu/).
+A PDF file that asks a language model for a story, over the internet, while you
+are reading it.
 
-Try it here: [linux.pdf](https://linux.doompdf.dev/linux.pdf)
+**Open it in Adobe Acrobat or Acrobat Reader.** It will not work in Chrome,
+Firefox, Edge, or Preview — their PDF viewers implement no networking at all.
 
-https://github.com/user-attachments/assets/7e992dd1-41a5-4d32-87cc-878b395e3d92
+## How it works
 
-See also: [DoomPDF](https://github.com/ading2210/doompdf)
+PDF files can contain JavaScript, and Acrobat gives that JavaScript exactly one
+way to reach the network: `Doc.submitForm()`, which posts the form's fields to a
+URL. The trick is the reply — if the server answers with an
+`application/vnd.fdf` document, Acrobat parses it and writes the values straight
+back into the form's fields. That is the return channel.
 
-## Explanation
-
-This works in a very similar way to my previous [DoomPDF](https://github.com/ading2210/doompdf) project.
-
-You might expect PDF files to only be comprised of static documents, but surprisingly, the PDF file format supports Javascript with its own separate standard library. Modern browsers (Chromium, Firefox) implement this as part of their PDF engines. However, the APIs that are available in the browser are much more limited. 
-
-The full specfication for the JS in PDFs was only ever implemented by Adobe Acrobat, and it contains some ridiculous things like the ability to do [3D rendering](https://opensource.adobe.com/dc-acrobat-sdk-docs/library/jsapiref/JS_API_AcroJS.html#annot3d), make [HTTP requests](https://opensource.adobe.com/dc-acrobat-sdk-docs/library/jsapiref/JS_API_AcroJS.html#net-http), and [detect every monitor connected to the user's system](https://opensource.adobe.com/dc-acrobat-sdk-docs/library/jsapiref/JS_API_AcroJS.html#monitor). However, on Chromium and other browsers, only a tiny subset of this API was ever implemented, due to obvious security concerns. With this, we can do whatever computation we want, just with some very limited IO.
-
-C code can be compiled to run within a PDF using an old version of Emscripten that targets [asm.js](https://en.wikipedia.org/wiki/Asm.js) instead of WebAssembly. With this, I can compile a modified version of the TinyEMU RISC-V emulator to asm.js, which can be run within the PDF. For the input and output, I reused the same display code that I used for DoomPDF. It works by using a separate text field for each row of pixels in the screen, whose contents are set to various ASCII characters. For inputs, there is a virtual keyboard implemented with a bunch of buttons, and a text box you can type in to send keystrokes to the VM.
-
-The largest problem here is with the emulator's performance. For example, the Linux kernel takes about 30-60 seconds to boot up within the PDF, which over 100x slower than normal. Unfortunately, there's no way to fix this, since the version of V8 that Chrome's PDF engine uses has its [JIT compiler disabled](https://source.chromium.org/chromium/_/pdfium/pdfium/+/012fe571c9fe430da68dbcd2f5ba21758db0ae15:fpdfsdk/fpdf_view.cpp;l=1211-1214;drc=b69783fd189976dd4625c7dcd9c07921b94d4a3c;bpv=0;bpt=0), destroying its performance.
-
-For the root filesystem, there are both 64 and 32 bit versions possible. The default is a 32 bit buildroot system (which was prebuilt and taken from the original TinyEMU examples), and also a 64 bit Alpine Linux system. The 64 bit emulator is about twice as slow however, so it's normally not used. 
-
-## Build Instructions
-
-Clone this repository and run the following commands:
 ```
+http_demo.pdf                              relay (holds the api key)
+  [topic: ....... (optional)]
+  [Generate] ──POST─────────▶ /api/story ──┬─ starts job, replies in ms
+             ◀── job id + WORKING ─────────┘        │
+  ...every 4s:                                      ├──▶ ai.hackclub.com
+  [poll]     ──POST job=xxx ─▶              ────────┘         │
+             ◀── WORKING, or the story ◀───── job done ◀───────┘
+```
+
+The relay exists for two unavoidable reasons. Anyone who opens a PDF can read
+every byte of it, so an API key stored inside the document is a published key.
+And Acrobat drops a `submitForm` connection long before a generation finishes,
+so the relay answers immediately with a job number and lets the document poll.
+
+`Net.HTTP.request` would be the obvious API to reach for, but it can only be
+called from a folder-level script installed into Acrobat — which no distributed
+PDF can rely on.
+
+## Layout
+
+| Path | |
+|------|---|
+| `gen_http_pdf.py` | builds the PDF |
+| `pdfform.py` | AcroForm widget helpers |
+| `httpdemo.js` | the document-level JavaScript |
+| `tools/dev_relay.py` | local relay, stdlib only |
+| `api/story.js` | the deployed relay (Vercel) |
+| `public/` | landing page, policy file, built PDF |
+
+## Running it locally
+
+```sh
 python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -r requirements.txt
-./build.sh
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+
+cp .env.example .env      # add your HACKCLUB_AI_KEY
+
+.venv/Scripts/python.exe tools/dev_relay.py 8000
+.venv/Scripts/python.exe gen_http_pdf.py out/http_demo.pdf local
 ```
-If you want to build the 64 bit rather than 32 bit version, edit `build.sh` and change the `BITS="32"` line.
 
-The `build.sh` script will download Emscripten `1.39.20` automatically. You must be on Linux to build this. 
-
-The generated files will be in the `out/` directory. Then you can run `(cd out; python3 -m http.server)` to serve the files on a web server.
+Then open `out/http_demo.pdf` in Acrobat. Full detail, including the deployment
+setup and a list of the things that silently break this, is in
+[docs/http-demo.md](docs/http-demo.md).
 
 ## Credits
 
-This project was made by [@ading2210](https://github.com/ading2210/).
+This is a fork of [linuxpdf](https://github.com/ading2210/linuxpdf) by
+[@ading2210](https://github.com/ading2210/), which runs an entire RISC-V Linux
+emulator inside a PDF using the same PDF-JavaScript tricks. `pdfform.py` is
+derived from that project's `gen_pdf.py`.
 
-The RISC-V emulator is forked from [TinyEMU](https://bellard.org/tinyemu/), which was written by [Fabrice Bellard](https://bellard.org/).
+See also [DoomPDF](https://github.com/ading2210/doompdf), and
+[TinyEMU](https://bellard.org/tinyemu/) by Fabrice Bellard, which linuxpdf's
+emulator is based on.
 
 ## License
 
-This repository is licensed under the GNU GPL v3.
+GNU GPL v3, inherited from linuxpdf. See [LICENSE](LICENSE).
 
 ```
-ading2210/linuxpdf - Linux running inside a PDF file
-Copyright (C) 2025 ading2210
+sloppdf - a PDF that writes stories
+Copyright (C) 2026 vandorena
+
+Derived from ading2210/linuxpdf, Copyright (C) 2025 ading2210
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -58,9 +88,6 @@ the Free Software Foundation, either version 3 of the License, or
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ```

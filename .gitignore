@@ -1,19 +1,14 @@
-/emsdk
 /.venv/
-/out/
-/build
 .venv
-*.js.d
-*.js.o
-*.wasm
-*.wat
-riscvemu32*.js
-riscvemu64*.js
 __pycache__/
+
+# local build output. the deployed pdf is committed at public/http_demo.pdf
+/out/
 
 # secrets - the relay's api key
 .env
 .dev.vars
+
 # node / vercel
 node_modules/
 .vercel/
