@@ -10,3 +10,7 @@
 riscvemu32*.js
 riscvemu64*.js
 __pycache__/
+
+# secrets - the relay's api key
+.env
+.dev.vars
