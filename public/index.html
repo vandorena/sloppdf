@@ -1,0 +1,76 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sloppdf - a PDF that writes stories</title>
+<style>
+  body { font: 16px/1.6 Georgia, serif; max-width: 40rem; margin: 0 auto;
+         padding: 3rem 1.25rem 5rem; background: #fbfaf7; color: #23231f; }
+  h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+  .sub { color: #6b6b63; font-style: italic; margin-top: 0; }
+  h2 { font-size: 1.05rem; margin-top: 2.25rem; }
+  a.dl { display: inline-block; margin: 1.5rem 0; padding: .7rem 1.3rem;
+         background: #23231f; color: #fbfaf7; text-decoration: none;
+         border-radius: 4px; font-family: system-ui, sans-serif;
+         font-size: .95rem; }
+  code { background: #efeee9; padding: .1em .35em; border-radius: 3px;
+         font-size: .85em; }
+  .warn { border-left: 3px solid #c2410c; padding: .5rem 0 .5rem .9rem;
+          background: #fdf4ee; }
+  ol { padding-left: 1.3rem; }
+  li { margin: .4rem 0; }
+  footer { margin-top: 3rem; color: #6b6b63; font-size: .85rem; }
+</style>
+
+<h1>sloppdf</h1>
+<p class="sub">A PDF file that asks a language model for a story, over the
+internet, while you are reading it.</p>
+
+<a class="dl" href="/http_demo.pdf">Download the PDF</a>
+
+<p class="warn"><strong>Open it in Adobe Acrobat or Acrobat Reader.</strong>
+It will not work in Chrome, Firefox, Edge, or Preview &mdash; their PDF viewers
+implement no networking at all.</p>
+
+<h2>How it works</h2>
+
+<p>PDF files can contain JavaScript. Acrobat gives that JavaScript exactly one way
+to reach the network: <code>Doc.submitForm()</code>, which posts the form's fields
+to a URL. The trick is the reply &mdash; if the server answers with an
+<code>application/vnd.fdf</code> document, Acrobat parses it and writes the values
+straight back into the form's fields. That is the return channel.</p>
+
+<ol>
+  <li>You type an optional topic and click <em>Generate</em>.</li>
+  <li>The PDF posts that topic to a small relay server.</li>
+  <li>The relay asks the model for a story, and immediately replies with a job
+      number &mdash; not the story.</li>
+  <li>The PDF re-submits every few seconds asking whether that job is done.</li>
+  <li>When it is, the relay sends the story back as FDF, and the text appears in
+      the page you are looking at.</li>
+</ol>
+
+<h2>Why the relay exists</h2>
+
+<p>Two reasons, both unavoidable.</p>
+
+<p><strong>The API key.</strong> Anyone who opens a PDF can read every byte of it,
+so a key stored inside the document is a published key. The relay holds it
+instead.</p>
+
+<p><strong>Acrobat will not wait.</strong> Writing a story takes seconds, and
+Acrobat drops a <code>submitForm</code> connection long before a slow one
+finishes &mdash; the reply is simply lost. So the relay never makes the PDF wait:
+it hands back a job number in milliseconds and lets the document poll.</p>
+
+<h2>Caveats</h2>
+
+<p>Acrobat will ask once whether to allow the document to contact the relay.
+That is its cross-domain check &mdash; a PDF opened from your disk has no origin
+of its own, so every response counts as cross-domain. Choose <em>Allow</em>.</p>
+
+<p>The window freezes for a moment on each poll, because <code>submitForm</code>
+blocks the interface. The status line counts the seconds so you can tell it is
+still working.</p>
+
+<footer>Built on <a href="https://github.com/ading2210/linuxpdf">linuxpdf</a> by
+ading2210, which runs an entire RISC-V Linux emulator in a PDF the same way.</footer>

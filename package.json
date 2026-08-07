@@ -1,0 +1,10 @@
+{
+  "name": "sloppdf",
+  "private": true,
+  "type": "module",
+  "description": "A PDF that makes a live HTTP request and writes a story",
+  "dependencies": {
+    "@upstash/redis": "^1.38.2",
+    "@vercel/functions": "^3.8.0"
+  }
+}

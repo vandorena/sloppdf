@@ -140,3 +140,8 @@ cat build/pako.min.js build/files.js pdflinux.js tinyemu/js/riscvemu$BITS.js > o
 
 python3 gen_pdf.py out/compiled.js out/linux.pdf
 cp web/* out
+
+#the http demo pdf is deployed separately, on vercel - it needs no emscripten
+#build, only pdfrw, and its artifact is committed at public/http_demo.pdf. see
+#docs/http-demo.md. rebuild it with:
+#  python3 gen_http_pdf.py public/http_demo.pdf
