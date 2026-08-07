@@ -9,3 +9,4 @@
 *.wat
 riscvemu32*.js
 riscvemu64*.js
+__pycache__/

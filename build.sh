@@ -140,3 +140,12 @@ cat build/pako.min.js build/files.js pdflinux.js tinyemu/js/riscvemu$BITS.js > o
 
 python3 gen_pdf.py out/compiled.js out/linux.pdf
 cp web/* out
+
+#the http demo pdf - needs no emscripten build, just pdfrw. RELAY_URL must point
+#at the deployed origin, since a pdf opened from disk can only talk to a host
+#that serves a permissive crossdomain.xml (see web/crossdomain.xml).
+RELAY_URL="${RELAY_URL:-https://linuxpdf.pages.dev/api/bacon}"
+python3 gen_http_pdf.py out/http_demo.pdf "$RELAY_URL"
+
+#cloudflare pages functions have to sit at the root of the published directory
+cp -r functions out/

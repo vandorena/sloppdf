@@ -3,8 +3,17 @@ import sys
 from pdfrw import PdfWriter
 from pdfrw.objects.pdfname import PdfName
 from pdfrw.objects.pdfstring import PdfString
-from pdfrw.objects.pdfdict import PdfDict
+from pdfrw.objects.pdfdict import PdfDict, IndirectPdfDict
 from pdfrw.objects.pdfarray import PdfArray
+from pdfrw.objects.pdfobject import PdfObject
+
+#text field flags, from the /Ff bit positions in the pdf spec
+FF_READONLY = 2
+FF_MULTILINE = 4096
+
+#the default appearance string used for form fields - /Helv must exist in the
+#acroform's /DR or acrobat has no font to draw the field's value with
+DEFAULT_DA = "/Helv 9 Tf 0 g"
 
 def create_script(js):
   action = PdfDict()
@@ -26,25 +35,31 @@ def create_page(width, height):
   
   return page
 
-def create_field(name, x, y, width, height, value="", f_type=PdfName.Tx):
+def create_field(name, x, y, width, height, value="", f_type=PdfName.Tx,
+                 multiline=False, readonly=True, da=DEFAULT_DA):
+  flags = 0
+  if readonly:
+    flags |= FF_READONLY
+  if multiline:
+    flags |= FF_MULTILINE
+
   annotation = PdfDict()
   annotation.Type = PdfName.Annot
   annotation.Subtype = PdfName.Widget
   annotation.FT = f_type
-  annotation.Ff = 2
+  annotation.Ff = flags
   annotation.Rect = PdfArray([x, y, x + width, y + height])
   annotation.T = PdfString.encode(name)
   annotation.V = PdfString.encode(value)
+  annotation.DA = PdfString.encode(da)
+  annotation.F = 4 #print
 
   annotation.BS = PdfDict()
   annotation.BS.W = 0
 
-  appearance = PdfDict()
-  appearance.Type = PdfName.XObject
-  appearance.SubType = PdfName.Form
-  appearance.FormType = 1
-  appearance.BBox = PdfArray([0, 0, width, height])
-  appearance.Matrix = PdfArray([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+  #the field must be an indirect object, otherwise pdfrw duplicates it when it
+  #appears in both the page's /Annots and the acroform's /Fields
+  annotation.indirect = True
 
   return annotation
 
@@ -64,6 +79,29 @@ def create_button(name, x, y, width, height, value):
   button.MK.BG = PdfArray([0.90])
   button.MK.CA = value
   return button
+
+#acrobat resolves getField() names through the catalog's /AcroForm /Fields, not
+#through the page's /Annots like pdfium does, so without this the fields are
+#invisible to javascript in acrobat.
+#must be called *after* writer.addpage() - addpage() resets writer._trailer, so
+#anything set on the catalog before it is silently discarded.
+def attach_acroform(writer, fields):
+  font = IndirectPdfDict()
+  font.Type = PdfName.Font
+  font.Subtype = PdfName.Type1
+  font.BaseFont = PdfName.Helvetica
+  font.Encoding = PdfName.WinAnsiEncoding
+
+  acroform = PdfDict()
+  acroform.Fields = PdfArray(fields)
+  acroform.DA = PdfString.encode(DEFAULT_DA)
+  acroform.DR = PdfDict()
+  acroform.DR.Font = PdfDict()
+  acroform.DR.Font.Helv = font
+  #pdfrw has no boolean type - a bare True would serialise as "True"
+  acroform.NeedAppearances = PdfObject("true")
+
+  writer.trailer.Root.AcroForm = acroform
 
 def create_key_buttons(keys_info):
   buttons = []
@@ -175,4 +213,5 @@ if __name__ == "__main__":
 
   page.Annots = PdfArray(fields)
   writer.addpage(page)
+  attach_acroform(writer, fields)
   writer.write(sys.argv[2])
