@@ -5,8 +5,9 @@ A PDF file that gets a clanker (in this case the LLM Qwen) to give you a unique 
 <img width="769" height="686" alt="image" src="https://github.com/user-attachments/assets/e67d45d5-0ca6-453d-9e51-64ed7f4c2412" />
 
 
-** Btw you gotta open this in Adobe Acrobat or Acrobat Reader.** It won't work in Chrome,
-Firefox, Edge, or Preview --- they care about security 😿. In Adobe Acrobat you may also get a security warning,
+** Btw you gotta open this in Adobe Acrobat or Acrobat Reader.** 
+It won't work in Chrome, Firefox, Edge, or Preview --- they care about security 😿. 
+In Adobe Acrobat you may also get a security warning,
 if you do, ensure that the domain matches my domain, https://slop.alexvd.dev, and you should
 be safe.
 
