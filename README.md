@@ -1,10 +1,25 @@
+
 # sloppdf
 
-A PDF file that asks a language model for a story, over the internet, while you
-are reading it.
+A PDF file that gets a clanker (in this case the LLM Qwen) to give you a unique all new 2026 Ford F1-Story.
 
-**Open it in Adobe Acrobat or Acrobat Reader.** It will not work in Chrome,
-Firefox, Edge, or Preview — their PDF viewers implement no networking at all.
+<img width="769" height="686" alt="image" src="https://github.com/user-attachments/assets/e67d45d5-0ca6-453d-9e51-64ed7f4c2412" />
+
+
+**Btw you gotta open this in Adobe Acrobat or Acrobat Reader.** 
+
+It won't work in Chrome, Firefox, Edge, or Preview --- they care about security 😿. 
+
+In Adobe Acrobat you may also get a security warning,
+if you do, ensure that the domain matches my domain, https://slop.alexvd.dev, and you should
+be safe.
+
+This was made by Alex Van Doren, one of the Devlopers behind Stardance -- with the help of Claude.
+As a project he wanted to make to send to his friends when he gets to College -- Brown University.
+
+https://github.com/user-attachments/assets/2d9ed786-889f-4fa7-b0a0-0c1abd26c094
+
+
 
 ## How it works
 
@@ -15,7 +30,7 @@ URL. The trick is the reply — if the server answers with an
 back into the form's fields. That is the return channel.
 
 ```
-slop.pdf                                   relay (holds the api key)
+http_demo.pdf                              relay (holds the api key)
   [topic: ....... (optional)]
   [Generate] ──POST─────────▶ /api/story ──┬─ starts job, replies in ms
              ◀── job id + WORKING ─────────┘        │
@@ -53,10 +68,10 @@ python3 -m venv .venv
 cp .env.example .env      # add your HACKCLUB_AI_KEY
 
 .venv/Scripts/python.exe tools/dev_relay.py 8000
-.venv/Scripts/python.exe gen_http_pdf.py out/slop.pdf local
+.venv/Scripts/python.exe gen_http_pdf.py out/http_demo.pdf local
 ```
 
-Then open `out/slop.pdf` in Acrobat. Full detail, including the deployment
+Then open `out/http_demo.pdf` in Acrobat. Full detail, including the deployment
 setup and a list of the things that silently break this, is in
 [docs/http-demo.md](docs/http-demo.md).
 
@@ -65,7 +80,7 @@ setup and a list of the things that silently break this, is in
 This is a fork of [linuxpdf](https://github.com/ading2210/linuxpdf) by
 [@ading2210](https://github.com/ading2210/), which runs an entire RISC-V Linux
 emulator inside a PDF using the same PDF-JavaScript tricks. `pdfform.py` is
-derived from that project's `gen_pdf.py`.
+derived from that project's `gen_pdf.py`. Trust me you should check this out as its awesome!
 
 See also [DoomPDF](https://github.com/ading2210/doompdf), and
 [TinyEMU](https://bellard.org/tinyemu/) by Fabrice Bellard, which linuxpdf's
