@@ -2,7 +2,7 @@
 /.venv/
 /out/
 /build
-
+.venv
 *.js.d
 *.js.o
 *.wasm
