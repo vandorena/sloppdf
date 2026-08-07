@@ -1,3 +1,4 @@
+
 # sloppdf
 
 A PDF file that gets a clanker (in this case the LLM Qwen) to give you a unique all new 2026 Ford F1-Story.
@@ -15,6 +16,10 @@ be safe.
 
 This was made by Alex Van Doren, one of the Devlopers behind Stardance -- with the help of Claude.
 As a project he wanted to make to send to his friends when he gets to College -- Brown University.
+
+https://github.com/user-attachments/assets/2d9ed786-889f-4fa7-b0a0-0c1abd26c094
+
+
 
 ## How it works
 
