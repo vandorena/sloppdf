@@ -114,6 +114,42 @@ h1{
   max-width:none;
 }
 h1 .sub{display:inline}
+/* the rule under "Slop" is drawn rather than typed: it wipes in from the right,
+   holds, then wipes out to the left, over and over - the same gesture the
+   hover underline makes, running on its own */
+/* the word itself catches a little light as the rule is drawn: a pale band
+   painted into the letterforms, crossing left-to-right as the wipe comes in */
+h1 u{
+  position:relative;display:inline-block;
+  text-decoration:none;
+  background-image:linear-gradient(100deg,
+    var(--ink-strong) 0 44%,
+    #7C8496 50%,
+    var(--ink-strong) 56% 100%);
+  background-size:300% 100%;
+  background-position:0 0;
+  background-repeat:no-repeat;
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;-webkit-text-fill-color:transparent;
+  animation:slop-glint 4s cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes slop-glint{
+  0%       {background-position:0 0}
+  30%,100% {background-position:100% 0}
+}
+h1 u::after{
+  content:"";position:absolute;
+  left:-.09em;right:-.09em;bottom:.11em;height:3px;
+  background:var(--ink-strong);
+  transform:scaleX(0);transform-origin:right;
+  animation:slop-rule 4s cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes slop-rule{
+  0%       {transform:scaleX(0);transform-origin:right}
+  30%      {transform:scaleX(1);transform-origin:right}
+  50%      {transform:scaleX(1);transform-origin:left}
+  80%,100% {transform:scaleX(0);transform-origin:left}
+}
 .head-lede{
   margin:var(--line) 0 0;
   font-size:20px;line-height:var(--line);
@@ -380,7 +416,12 @@ td code{white-space:nowrap}
   h2{font-size:25px}
 }
 
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  h1 u{animation:none;background-image:none;
+       color:var(--ink-strong);-webkit-text-fill-color:currentColor}
+  h1 u::after{animation:none;transform:scaleX(1)}
+}
 
 @media print{
   body{background:#fff}
@@ -428,23 +469,13 @@ td code{white-space:nowrap}
       <section id="overview">
         <h2>Overview</h2>
 
-        <p><strong>sloppdf</strong> is a standalone PDF that calls a language
-          model over the network and displays the result — in Adobe Acrobat, with
-          nothing installed. No folder-level scripts, no certificates, no
-          companion app. Everything that makes it work is inside the file you
-          download.</p>
+        <p>A <strong>PDF</strong> that calls Qwen via a relay to generate slop stories and displays the result in Adobe Acrobat.</p>
 
-        <p>It exists because PDF is a far stranger format than it looks. The
-          specification includes a JavaScript engine, a forms system, and a way
-          to post those forms to a server. Chain the three together and a
-          document becomes a network client.</p>
+        <p>Working because the PDF spec's supports javascript, and can recieve inputs through form handling.</p>
 
         <div class="callout warn">
-          <p class="label">Acrobat only</p>
-          <p>This will not work in Chrome, Firefox, Edge, or macOS Preview. Their
-            PDF engines implement no network API at all — PDFium simply has
-            nothing to call. The document is Acrobat-only by nature, not by
-            choice.</p>
+          <p class="label">this only works on Adobe Acrobat</p>
+          <p>This document is Adobe desktop/mac only by nature -- mainly because adobe was the only pdf viewing company that fully implemented the spec :p <br> Your mileage may vary if you use something else.</p>
         </div>
       </section>
 
@@ -452,25 +483,14 @@ td code{white-space:nowrap}
         <h2>Requirements</h2>
 
         <ul class="body">
-          <li><strong>Adobe Acrobat</strong> or the free <strong>Acrobat
+          <li><strong>Adobe Acrobat</strong> or <strong>Acrobat
             Reader</strong>, on Windows or macOS.</li>
-          <li>A network connection — the document talks to a relay at
-            <code>slop.alexvd.dev</code>.</li>
-          <li>Nothing else. No API key, no account, no install.</li>
+          <li>A network connection </li>
         </ul>
 
-        <p>On first use Acrobat asks once whether to allow the document to
-          contact the relay. Choose <strong>Allow</strong>, and tick <em>Remember
-          my action for this site</em>. That prompt is Acrobat's cross-domain
-          check: a PDF opened from your disk has no origin of its own, so every
-          response counts as cross-domain until the host says otherwise.</p>
+        <p>Adobe thinks I'm trying to attack you when it realises a request is being sent out.
+              So it'll ask for your permission. Choose <strong>Allow</strong> -- I won't do anything too bad >:)</p>
 
-        <div class="callout tip">
-          <p class="label">If the fields go blank</p>
-          <p>Adobe reloads the document when you accept trust through the yellow
-            message bar. Any text already on screen disappears. Just click
-            <em>Generate</em> again.</p>
-        </div>
       </section>
 
       <section id="how-it-works">
