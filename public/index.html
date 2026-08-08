@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sloppdf — a PDF that writes Slop</title>
+<title>sloppdf; a PDF that writes Slop</title>
 <meta name="description" content="A standalone PDF that calls a language model over the network and writes the result into its own form fields, live, in Adobe Acrobat.">
 <meta name="color-scheme" content="light">
 <meta property="og:type" content="website">
@@ -116,6 +116,15 @@ h1{
   max-width:none;
 }
 h1 .sub{display:inline}
+/* the sparkles flank the word without joining it - set smaller than the
+   title and nudged up, so they read as marks in the margin of the line */
+h1 .spark{
+  display:inline-block;
+  font-size:.64em;line-height:1;
+  vertical-align:.36em;
+  margin:0 .16em;
+  filter:grayscale(1);
+}
 /* the rule under "Slop" is drawn rather than typed: it wipes in from the right,
    holds, then wipes out to the left, over and over - the same gesture the
    hover underline makes, running on its own */
@@ -441,7 +450,8 @@ td code{white-space:nowrap}
 
   <header class="sheet-head">
     <div>
-      <h1>A PDF that <span class="sub">writes...  <u>Slop</u></span></h1>
+      <h1>A PDF that <span class="sub">writes...
+        <span class="spark" aria-hidden="true">&#10024;</span><u>Slop</u><span class="spark" aria-hidden="true">&#10024;</span></span></h1>
       <p class="head-lede">Fetches a relay from within Adobe Acrobat, try it now, download the pdf below! :D</p>
       <p class="head-cta">
         <a class="btn" href="/slop.pdf">Download slop.pdf</a>
