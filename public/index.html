@@ -284,6 +284,13 @@ h3{
 }
 p{margin:0 0 var(--line)}
 strong{font-weight:700;color:var(--ink-strong)}
+/* an emoji set into a line of prose. 22px inside a 30px band, so it cannot
+   push the line box open and knock the ruling out of step; nudged down to sit
+   on the serif's baseline rather than hanging from the cap height. */
+img.emoji{
+  display:inline-block;width:22px;height:22px;
+  vertical-align:-.28em;margin:0 .1em;
+}
 
 ul.body,ol.body{margin:0 0 var(--line);padding-left:26px}
 ul.body li,ol.body li{margin:0;line-height:var(--line)}
@@ -552,94 +559,24 @@ td code{white-space:nowrap}
         <h2>How it works</h2>
 
         <p>Acrobat exposes exactly one network API to an ordinary document:
-          <code>Doc.submitForm()</code>, which posts the form's fields to a URL.
-          Unlike <code>Net.HTTP.request</code> it is not security restricted, and
-          it works in the free Reader outside a browser.</p>
+          <code>Doc.submitForm()</code>, which posts the form's fields to a URL,
+          I think it was maybe meant as a low tech alternative to google forms.
+       </p>
 
-        <p>The trick is the reply. When the server answers with
-          <code>Content-Type: application/vnd.fdf</code>, Acrobat parses the FDF
-          and imports the values <strong>into the document that made the
-          request</strong>. Out is a form post; back is a form fill. That round
-          trip is the whole mechanism.</p>
-
-        <div class="diagram">
-          <svg viewBox="0 0 900 270" role="img"
-               aria-label="slop.pdf posts a topic to the relay, which replies immediately with a job id, starts generation against ai.hackclub.com, and hands the story back on a later poll.">
-            <defs>
-              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5"
-                      markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M0 0 L10 5 L0 10 z" fill="context-stroke"/>
-              </marker>
-            </defs>
-
-            <rect class="d-box" x="8" y="40" width="210" height="170"/>
-            <text class="d-title" x="26" y="70">slop.pdf</text>
-            <text class="d-sub"   x="26" y="94">topic</text>
-            <rect x="26" y="102" width="174" height="18" fill="none"
-                  stroke="var(--slip-edge)" stroke-width="1.5"/>
-            <text class="d-sub"   x="26" y="148">status</text>
-            <rect x="26" y="156" width="174" height="18" fill="none"
-                  stroke="var(--slip-edge)" stroke-width="1.5"/>
-            <rect x="26" y="182" width="88" height="20" fill="none"
-                  stroke="var(--margin-rule)" stroke-width="1.5"/>
-            <text x="36" y="196" fill="var(--margin-rule)"
-                  style="font:400 11px var(--mono)">generate</text>
-
-            <rect class="d-box" x="345" y="40" width="210" height="170"/>
-            <text class="d-title" x="363" y="70">relay</text>
-            <text class="d-sub"   x="363" y="94">/api/story</text>
-            <text class="d-sub"   x="363" y="148">holds the key</text>
-            <text class="d-sub"   x="363" y="168">holds the jobs</text>
-
-            <rect class="d-box-2" x="682" y="80" width="210" height="90"/>
-            <text class="d-title" x="700" y="118">the model</text>
-            <text class="d-sub"   x="700" y="142">ai.hackclub.com</text>
-
-            <text class="d-lbl" x="228" y="76">1. POST topic</text>
-            <path class="d-arrow" d="M222 88 L341 88" marker-end="url(#ah)"/>
-
-            <text class="d-lbl" x="228" y="128">2. job id (ms)</text>
-            <path class="d-arrow d-arrow-b" d="M341 140 L222 140" marker-end="url(#ah)"/>
-
-            <text class="d-lbl" x="228" y="182">3. poll / 4s</text>
-            <path class="d-arrow d-arrow-r" d="M222 194 L341 194" marker-end="url(#ah)"/>
-
-            <path class="d-arrow" d="M559 108 L678 108" marker-end="url(#ah)"/>
-            <text class="d-lbl" x="566" y="96">prompt</text>
-            <path class="d-arrow d-arrow-b" d="M678 152 L559 152" marker-end="url(#ah)"/>
-            <text class="d-lbl" x="566" y="172">story</text>
-
-            <text class="d-sub" x="8" y="250">every request completes in 3–50ms</text>
-          </svg>
-        </div>
-
-        <p>The document script never waits on the model. It fires a submit, and
-          the relay answers in milliseconds with a job id rather than a story:</p>
-
-        <figure class="code" data-lang="js">
-          <figcaption><span class="grow">httpdemo.js</span><button class="copy" type="button">Copy</button></figcaption>
-<pre><code class="lang-js">function submit_now() {
-  DOC.submitForm({
-    cURL: RELAY_URL + "#FDF",
-    cSubmitAs: submit_mode,
-    aFields: ["topic", "job"],
-    bEmpty: true
-  });
-}</code></pre>
-        </figure>
+        <p>Acrobat doens't allow for standard JSON responses, so we need to be a bit creative. 
+             Acrobat does however, support <code>FDF</code> responses, which is a format intended for PDF form data.
+       Thus when we send a response with <code>Content-Type: application/vnd.fdf</code>, Acrobat parses the FDF
+          and imports the values <strong>into our document</strong>
+          <img class="emoji" src="yay.png" alt="yay" width="22" height="22">.</p>
 
         <div class="callout">
           <p class="label">Note</p>
-          <p>At document level <code>this</code> is the <code>Doc</code>, which
-            is why the script opens with <code>var DOC = this;</code>. Upstream
-            linuxpdf reaches fields through <code>globalThis.getField()</code> —
-            that works in PDFium, but in Acrobat <code>getField</code> is a
-            <code>Doc</code> method and the global does not exist.</p>
+          <p>I did cook.</p>
         </div>
       </section>
 
       <section id="return-channel">
-        <h2>The return channel</h2>
+        <h2>So WTF is a FDF?</h2>
 
         <p>An FDF file is a small container of field names and values. The relay
           builds one by hand for every reply — three fields, every time:</p>
@@ -778,166 +715,10 @@ waitUntil(
         </div>
       </section>
 
-      <section id="model">
-        <h2>The model</h2>
 
-        <p>The default is <code>qwen/qwen3-32b</code>, measured at 13–20 seconds
-          per story. Speed is the reason for the choice, not quality: a Vercel
-          Hobby function is killed at 60 seconds and <code>waitUntil</code> work
-          dies with it, so anything slower leaves jobs that never finish.</p>
 
-        <div class="callout warn">
-          <p class="label">Reasoning models are a trap here</p>
-          <p>They burn 300–900 tokens thinking before writing a word, and take
-            anywhere from 16 seconds to over three minutes for the same prompt.
-            If <code>max_tokens</code> does not cover the thinking <em>as well
-            as</em> the story, the API returns
-            <code>finish_reason: "length"</code> with <code>content: null</code>
-            — no story, no error, nothing. That is why <code>MAX_TOKENS</code>
-            defaults to 3000 rather than the ~500 a 300-word story needs, and why
-            both relays raise a message naming this cause instead of failing on a
-            null.</p>
-        </div>
 
-        <p>Note also that a leading <code>~</code> on a model id, as in
-          <code>~deepseek/deepseek-v4-flash-latest</code>, is part of the id and
-          not a typo — it marks a floating alias on the proxy. Without it the API
-          answers <code>is not a valid model ID</code>.</p>
-
-        <div class="tw">
-          <table>
-            <thead>
-              <tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>HACKCLUB_AI_KEY</code></td><td>—</td><td>Required. The credential the relay holds.</td></tr>
-              <tr><td><code>HACKCLUB_AI_MODEL</code></td><td><code>qwen/qwen3-32b</code></td><td>Override the model.</td></tr>
-              <tr><td><code>HACKCLUB_AI_MAX_TOKENS</code></td><td><code>3000</code></td><td>Budget for thinking plus story.</td></tr>
-              <tr><td><code>HACKCLUB_AI_URL</code></td><td>Hack Club proxy</td><td>Override the endpoint.</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p>The prompt itself is fixed (<code>BASE_PROMPT</code>, defined in both
-          relays — keep the two copies in sync), plus your topic if you typed
-          one, plus a short random entropy token. That token exists because the
-          prompt asks the model to be random, and because it stops any layer in
-          between from serving a cached completion.</p>
-      </section>
-
-      <section id="local">
-        <h2>Run it locally</h2>
-
-        <figure class="code" data-lang="sh">
-          <figcaption><span class="grow">setup</span><button class="copy" type="button">Copy</button></figcaption>
-<pre><code class="lang-sh">python3 -m venv .venv
-.venv/Scripts/python.exe -m pip install -r requirements.txt
-
-cp .env.example .env    # put your key in HACKCLUB_AI_KEY</code></pre>
-        </figure>
-
-        <p><code>.env</code> is gitignored. A real environment variable overrides
-          the file, so CI and one-off overrides still work.</p>
-
-        <figure class="code" data-lang="sh">
-          <figcaption><span class="grow">two terminals</span><button class="copy" type="button">Copy</button></figcaption>
-<pre><code class="lang-sh"># terminal 1 - the relay
-.venv/Scripts/python.exe tools/dev_relay.py 8000
-
-# terminal 2 - a pdf pointed at it. note out/, not public/
-.venv/Scripts/python.exe gen_http_pdf.py out/slop.pdf local</code></pre>
-        </figure>
-
-        <p>Open <code>out/slop.pdf</code> in Acrobat, optionally type a topic, and
-          click <em>Generate</em>. The dev relay is stdlib-only and serves the
-          same <code>public/</code> directory Vercel does, so
-          <code>http://127.0.0.1:8000/</code> shows this very page. Routes are
-          <code>/</code>, <code>/slop.pdf</code>, <code>/crossdomain.xml</code>
-          and <code>POST /api/story</code>. Static files are read off disk per
-          request, so a rebuild needs no restart.</p>
-
-        <div class="callout warn">
-          <p class="label">Keep the two builds straight</p>
-          <p>The relay URL is baked in at generation time. A PDF built with
-            <code>local</code> will keep trying <code>127.0.0.1</code> on whoever
-            opens it.</p>
-        </div>
-
-        <div class="tw">
-          <table>
-            <thead>
-              <tr><th scope="col">File</th><th scope="col">Talks to</th><th scope="col">Purpose</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>public/slop.pdf</code></td><td><code>https://slop.alexvd.dev/api/story</code></td><td>Committed, deployed</td></tr>
-              <tr><td><code>out/slop.pdf</code></td><td><code>http://127.0.0.1:8000/api/story</code></td><td>Local testing, gitignored</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="callout tip">
-          <p class="label">Use 127.0.0.1, not localhost</p>
-          <p>On Windows <code>localhost</code> resolves to <code>::1</code>
-            first. With the dev relay bound to IPv4 only, every request pays a ~2
-            second fallback penalty. The same relay over <code>127.0.0.1</code>
-            answers in 3ms.</p>
-        </div>
-      </section>
-
-      <section id="deploy">
-        <h2>Deploying</h2>
-
-        <p>The public build runs on Vercel at
-          <a href="https://slop.alexvd.dev">slop.alexvd.dev</a>.</p>
-
-        <ol class="body">
-          <li>Add the <strong>Upstash Redis</strong> (or Vercel KV) integration.
-            It sets <code>KV_REST_API_URL</code> / <code>KV_REST_API_TOKEN</code>;
-            the code also accepts the <code>UPSTASH_REDIS_REST_URL</code> pair.</li>
-          <li>Set <code>HACKCLUB_AI_KEY</code> in the project's environment
-            variables.</li>
-          <li>Point the domain at the project.</li>
-        </ol>
-
-        <p>Rebuild the PDF after any change to <code>httpdemo.js</code> or
-          <code>gen_http_pdf.py</code>, and commit it. It is a build artefact,
-          but Vercel deploys from git and has no Python toolchain here:</p>
-
-        <figure class="code" data-lang="sh">
-          <figcaption><span class="grow">rebuild before committing</span><button class="copy" type="button">Copy</button></figcaption>
-<pre><code class="lang-sh">.venv/Scripts/python.exe gen_http_pdf.py public/slop.pdf</code></pre>
-        </figure>
-
-        <div class="callout warn">
-          <p class="label">Check the production branch</p>
-          <p>Vercel's production branch defaults to the repository's default
-            branch. Make sure that is the branch this code actually lives on, or
-            the deploy will serve nothing and <code>/api/story</code> will
-            404.</p>
-        </div>
-      </section>
-
-      <section id="layout">
-        <h2>Project layout</h2>
-
-        <div class="tw">
-          <table>
-            <thead>
-              <tr><th scope="col">Path</th><th scope="col">What it is</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>gen_http_pdf.py</code></td><td>Builds the PDF</td></tr>
-              <tr><td><code>pdfform.py</code></td><td>AcroForm widget helpers</td></tr>
-              <tr><td><code>httpdemo.js</code></td><td>The document-level JavaScript</td></tr>
-              <tr><td><code>tools/dev_relay.py</code></td><td>Local relay, stdlib only</td></tr>
-              <tr><td><code>api/story.js</code></td><td>The deployed relay (Vercel)</td></tr>
-              <tr><td><code>public/</code></td><td>This page, the policy file, the built PDF</td></tr>
-              <tr><td><code>vercel.json</code></td><td><code>maxDuration</code> and the policy file's Content-Type</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
+      
       <section id="pitfalls">
         <h2>What silently breaks it</h2>
 
@@ -1013,10 +794,10 @@ cp .env.example .env    # put your key in HACKCLUB_AI_KEY</code></pre>
       <section id="credits">
         <h2>Credits &amp; licence</h2>
 
-        <p>Built by <strong>Alex Van Doren</strong>, one of the developers behind
-          Stardance — as something to send to friends on the way to Brown.</p>
+        <p>Built by me, <strong><a href="https://alexvd.dev/">Alex Van Doren</a></strong>, one of the developers behind
+          Hack Club's Stardance Challenge, and super cool sailor, because I thought it would be stupid, and also because I wanted to have something funny to show my new friends at Brown.</p>
 
-        <p>This is a fork of
+        <p>BTW this is a fork of
           <a href="https://github.com/ading2210/linuxpdf">linuxpdf</a> by
           <a href="https://github.com/ading2210/">ading2210</a>, which runs an
           entire RISC-V Linux emulator inside a PDF using the same tricks.
