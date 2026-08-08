@@ -1,76 +1,1193 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sloppdf - a PDF that writes stories</title>
+<title>sloppdf; a PDF that writes Slop</title>
+<meta name="description" content="A standalone PDF that calls a language model over the network and writes the result into its own form fields, live, in Adobe Acrobat.">
+<meta name="color-scheme" content="light">
+<meta property="og:type" content="website">
+<meta property="og:title" content="sloppdf — a PDF that writes stories">
+<meta property="og:description" content="A standalone PDF that calls a language model over the network and writes the result into its own form fields, live, in Adobe Acrobat.">
+<meta property="og:url" content="https://slop.alexvd.dev/">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23FFFDF7'/%3E%3Cpath d='M0 9h32M0 16h32M0 23h32' stroke='%23BBD4E8' stroke-width='1.5'/%3E%3Cpath d='M7 0v32' stroke='%23E8695D' stroke-width='1.5'/%3E%3C/svg%3E">
+
 <style>
-  body { font: 16px/1.6 Georgia, serif; max-width: 40rem; margin: 0 auto;
-         padding: 3rem 1.25rem 5rem; background: #fbfaf7; color: #23231f; }
-  h1 { font-size: 1.6rem; margin-bottom: .25rem; }
-  .sub { color: #6b6b63; font-style: italic; margin-top: 0; }
-  h2 { font-size: 1.05rem; margin-top: 2.25rem; }
-  a.dl { display: inline-block; margin: 1.5rem 0; padding: .7rem 1.3rem;
-         background: #23231f; color: #fbfaf7; text-decoration: none;
-         border-radius: 4px; font-family: system-ui, sans-serif;
-         font-size: .95rem; }
-  code { background: #efeee9; padding: .1em .35em; border-radius: 3px;
-         font-size: .85em; }
-  .warn { border-left: 3px solid #c2410c; padding: .5rem 0 .5rem .9rem;
-          background: #fdf4ee; }
-  ol { padding-left: 1.3rem; }
-  li { margin: .4rem 0; }
-  footer { margin-top: 3rem; color: #6b6b63; font-size: .85rem; }
+/* ===========================================================================
+   THE SHEET
+   One number governs this whole page: --line. The paper's ruling repeats on
+   it, every line box is exactly it, and every vertical margin is a multiple
+   of it. That is what keeps the writing sitting on the lines.
+   =========================================================================== */
+:root{
+  --line:30px;              /* the ruling period. everything derives from it. */
+  --rule-y:26px;            /* where in the band the rule sits: 4px below the
+                               baseline of an 18px serif in a 30px line box, so
+                               the writing rides just above the line rather
+                               than sitting on it */
+  --margin-w:210px;         /* the paper's left margin, holding the quicklinks */
+  --sheet-w:1060px;
+  --measure:42rem;
+
+  --desk:#34383F;
+  --paper:#FFFDF7;
+  --paper-edge:#EDE8DC;
+  --rule:#BBD4E8;
+  --margin-rule:#E8695D;
+  --ink:#1F2328;
+  --ink-strong:#101319;
+  --muted:#63697A;
+  --link:#1B5FA8;
+  --slip:#F5F4EE;           /* pasted-in slips: code, tables, diagrams */
+  --slip-edge:#DCD8CC;
+
+  --t-c:#6B7280; --t-s:#1F6B45; --t-k:#A61B1F;
+  --t-n:#8A4C00; --t-f:#1B4F9C; --t-p:#55524B;
+
+  --serif:"Times New Roman",Times,"Liberation Serif","Nimbus Roman",
+          "Tinos",serif;
+  --mono:ui-monospace,"Cascadia Mono",SFMono-Regular,"SF Mono",Consolas,
+         "Liberation Mono",monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:var(--desk);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:18px;
+  line-height:var(--line);
+  -webkit-font-smoothing:antialiased;
+}
+
+a{color:var(--link);text-underline-offset:.16em}
+:focus-visible{outline:2px solid var(--margin-rule);outline-offset:2px}
+::selection{background:#FFE9A8;color:#101319}
+
+.skip{
+  position:absolute;left:-9999px;top:0;z-index:100;
+  background:var(--ink-strong);color:var(--paper);
+  padding:.6rem 1rem;font-family:var(--mono);
+}
+.skip:focus{left:0}
+
+/* --------------------------------------------------------------- the sheet */
+.sheet{
+  position:relative;
+  max-width:var(--sheet-w);
+  margin:var(--line) auto calc(var(--line) * 2);
+  background-color:var(--paper);
+  box-shadow:0 1px 2px rgba(0,0,0,.28), 0 18px 40px -18px rgba(0,0,0,.55);
+}
+/* the red margin rule, drawn over everything including the masthead */
+.sheet::after{
+  content:"";position:absolute;z-index:3;
+  top:0;bottom:0;left:var(--margin-w);width:2px;
+  background:var(--margin-rule);
+}
+/* ring-binder holes punched down the left edge, showing the desk through */
+.sheet::before{
+  content:"";position:absolute;z-index:2;
+  top:0;bottom:0;left:26px;width:18px;
+  background-image:radial-gradient(circle at 9px 60px,
+    var(--desk) 8px,var(--paper-edge) 8px,transparent 9.5px);
+  background-size:18px calc(var(--line) * 4);
+  background-repeat:repeat-y;
+}
+
+/* ------------------------------------------------------------- the heading */
+/* opaque paper, so the ruling stops where the title sits - as on a real page */
+.sheet-head{
+  position:relative;z-index:1;
+  background:var(--paper);
+  padding:var(--line) 60px 0 calc(var(--margin-w) + 36px);
+  border-bottom:1px solid var(--paper-edge);
+}
+/* the title is set to fill the writing column, not to sit in a short block:
+   it grows with the sheet and wraps only when it runs out of paper */
+h1{
+  margin:0;
+  font-size:clamp(32px,5.2vw,54px);line-height:1.12;
+  font-weight:700;letter-spacing:-.02em;
+  color:var(--ink-strong);
+  max-width:none;
+}
+h1 .sub{display:inline}
+/* the sparkles flank the word without joining it - set smaller than the
+   title and nudged up, so they read as marks in the margin of the line */
+h1 .spark{
+  display:inline-block;
+  font-size:.64em;line-height:1;
+  vertical-align:.36em;
+  margin:0 .16em;
+  filter:grayscale(1);
+}
+/* the rule under "Slop" is drawn rather than typed: it wipes in from the right,
+   holds, then wipes out to the left, over and over - the same gesture the
+   hover underline makes, running on its own */
+/* the word itself catches a little light as the rule is drawn: a pale band
+   painted into the letterforms, crossing left-to-right as the wipe comes in */
+h1 u{
+  position:relative;display:inline-block;
+  text-decoration:none;
+  background-image:linear-gradient(100deg,
+    var(--ink-strong) 0 44%,
+    #7C8496 50%,
+    var(--ink-strong) 56% 100%);
+  background-size:300% 100%;
+  background-position:0 0;
+  background-repeat:no-repeat;
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;-webkit-text-fill-color:transparent;
+  animation:slop-glint 4s cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes slop-glint{
+  0%       {background-position:0 0}
+  30%,100% {background-position:100% 0}
+}
+h1 u::after{
+  content:"";position:absolute;
+  left:-.09em;right:-.09em;bottom:.11em;height:3px;
+  background:var(--ink-strong);
+  transform:scaleX(0);transform-origin:right;
+  animation:slop-rule 4s cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes slop-rule{
+  0%       {transform:scaleX(0);transform-origin:right}
+  30%      {transform:scaleX(1);transform-origin:right}
+  50%      {transform:scaleX(1);transform-origin:left}
+  80%,100% {transform:scaleX(0);transform-origin:left}
+}
+.head-lede{
+  margin:var(--line) 0 0;
+  font-size:20px;line-height:var(--line);
+  color:var(--muted);
+  max-width:none;
+}
+.head-cta{margin:var(--line) 0 calc(var(--line) / 4);display:flex;
+          flex-wrap:wrap;gap:12px;align-items:center}
+.btn{
+  display:inline-flex;align-items:center;gap:.55rem;
+  height:calc(var(--line) * 1.5);
+  padding:0 22px;
+  background:var(--ink-strong);color:var(--paper);
+  border:1px solid var(--ink-strong);
+  font-family:var(--mono);font-size:13px;letter-spacing:.06em;
+  text-decoration:none;
+}
+.btn:hover{background:transparent;color:var(--ink-strong)}
+.btn-2{
+  background:transparent;color:var(--ink-strong);
+  border:1px solid var(--slip-edge);
+}
+.btn-2:hover{background:transparent;border-color:var(--ink-strong)}
+
+/* --------------------------------------------------- margin + writing area */
+/* The ruling is anchored HERE, not on the sheet, and this is the whole reason
+   the writing lands on the lines. The masthead's height depends on how its
+   text wraps, so it is not a multiple of --line - ruling the sheet from its
+   very top would push every line below out of register by whatever remainder
+   the masthead happened to have. Starting the bands where the writing starts
+   makes the alignment structural instead of a coincidence. */
+.sheet-grid{
+  display:grid;
+  grid-template-columns:var(--margin-w) minmax(0,1fr);
+  background-image:linear-gradient(
+    to bottom,
+    transparent 0 var(--rule-y),
+    var(--rule) var(--rule-y) calc(var(--rule-y) + 1px),
+    transparent calc(var(--rule-y) + 1px) var(--line));
+  background-size:100% var(--line);
+}
+
+/* the quicklinks live in the paper's margin, left of the red rule */
+.sheet-margin{padding:var(--line) 18px calc(var(--line) * 2) 56px}
+/* written into the margin and left there. it does not track the viewport -
+   the contents belong to the sheet, and scroll away with it like anything
+   else written on the page */
+.quicklinks{position:static}
+.quicklinks h2{
+  margin:0 0 calc(var(--line) / 2);
+  font-family:var(--mono);font-size:10px;line-height:15px;
+  letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);
+}
+.quicklinks ol{list-style:none;margin:0;padding:0;counter-reset:ql}
+.quicklinks li{counter-increment:ql}
+.quicklinks a{
+  display:block;
+  font-size:14px;line-height:var(--line);
+  color:var(--muted);text-decoration:none;
+  text-indent:-18px;padding-left:18px;
+}
+.quicklinks ol a::before{
+  content:counter(ql) ".";
+  display:inline-block;width:18px;
+  font-family:var(--mono);font-size:11px;
+  color:var(--rule);
+}
+.quicklinks a:hover{color:var(--ink-strong);text-decoration:underline}
+.quicklinks a[aria-current="true"]{
+  color:var(--ink-strong);font-weight:700;
+}
+.quicklinks ol a[aria-current="true"]::before{content:"\27A4";color:var(--margin-rule)}
+.margin-out{
+  margin-top:var(--line);padding-top:calc(var(--line) / 2);
+  border-top:1px solid var(--paper-edge);
+}
+.margin-out a{
+  display:block;font-family:var(--mono);font-size:11px;line-height:20px;
+  color:var(--muted);text-decoration:none;
+}
+.margin-out a:hover{color:var(--ink-strong);text-decoration:underline}
+
+.sheet-body{
+  min-width:0;
+  padding:var(--line) 60px calc(var(--line) * 3) 36px;
+}
+.sheet-body > section > *{max-width:var(--measure)}
+
+/* ------------------------------------------------------- the writing, on grid
+   every rule below resolves to a whole multiple of --line, so a paragraph
+   after a table still lands on a ruled line.                                */
+section{display:flow-root}
+section + section{margin-top:var(--line)}
+/* Overview ends on a note, and a note already carries its own air - the
+   shadow and the peeled corner read as space. One whole band back, so the
+   ruling underneath is unaffected. */
+#requirements{margin-top:0}
+/* A heading is set larger than the body, so its baseline sits lower in an
+   identical line box. It takes one whole band of padding to keep the block a
+   multiple of --line, then a visual nudge - which costs no height - to drop
+   its baseline back onto the rule the body text uses. */
+h2{
+  position:relative;top:-3px;
+  margin:calc(var(--line) * 2) 0 0;
+  padding-top:var(--line);
+  font-size:28px;line-height:var(--line);
+  font-weight:700;letter-spacing:-.015em;
+  color:var(--ink-strong);
+}
+section > h2:first-child{margin-top:0}
+/* the first heading on the page needs no band of air above it - the masthead
+   already provides it - so it starts one line higher. Still a whole band
+   removed, so everything below stays on its rule. */
+.sheet-body > section:first-of-type > h2:first-child{padding-top:0}
+h3{
+  margin:var(--line) 0 0;
+  font-size:21px;line-height:var(--line);
+  font-weight:700;
+  color:var(--ink-strong);
+}
+p{margin:0 0 var(--line)}
+strong{font-weight:700;color:var(--ink-strong)}
+
+ul.body,ol.body{margin:0 0 var(--line);padding-left:26px}
+ul.body li,ol.body li{margin:0;line-height:var(--line)}
+ul.body li::marker{color:var(--margin-rule)}
+ol.body li::marker{color:var(--muted);font-family:var(--mono);font-size:14px}
+
+/* ------------------------------------------------------------------ slips
+   code, tables and the diagram read as slips pasted onto the page. borders
+   are drawn with box-shadow so they add no height and never break the grid. */
+code{
+  font-family:var(--mono);font-size:.82em;
+  background:var(--slip);
+  box-shadow:0 0 0 1px var(--slip-edge);
+  padding:0 .3em;
+  color:var(--ink-strong);
+}
+
+figure.code{
+  margin:var(--line) 0;
+  background:var(--slip);
+  box-shadow:0 0 0 1px var(--slip-edge),2px 2px 0 rgba(0,0,0,.05);
+}
+figure.code figcaption{
+  display:flex;align-items:center;gap:1rem;
+  height:var(--line);
+  padding:0 6px 0 16px;
+  box-shadow:inset 0 -1px 0 var(--slip-edge);
+  font-family:var(--mono);font-size:11px;line-height:var(--line);
+  letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);
+}
+figure.code figcaption .grow{flex:1}
+.copy{
+  appearance:none;background:transparent;
+  border:1px solid var(--slip-edge);
+  color:var(--muted);
+  font-family:var(--mono);font-size:10px;line-height:18px;
+  letter-spacing:.12em;text-transform:uppercase;
+  padding:0 8px;cursor:pointer;
+}
+.copy:hover{border-color:var(--ink);color:var(--ink-strong)}
+.copy[data-done="1"]{border-color:var(--t-s);color:var(--t-s)}
+/* 15 + 15 padding = one whole line, so the slip stays a multiple of --line */
+figure.code pre{
+  margin:0;padding:15px 16px;
+  overflow-x:auto;
+  font-family:var(--mono);font-size:14px;line-height:var(--line);
+  color:var(--ink);tab-size:2;
+}
+figure.code pre code{background:none;box-shadow:none;padding:0;
+                     font-size:inherit;color:inherit}
+.t-c{color:var(--t-c);font-style:italic}
+.t-s{color:var(--t-s)}
+.t-k{color:var(--t-k);font-weight:600}
+.t-n{color:var(--t-n)}
+.t-f{color:var(--t-f)}
+.t-p{color:var(--t-p)}
+
+/* the svg is given a fixed height in whole lines, so it cannot drift */
+.diagram{
+  margin:var(--line) 0;padding:15px 16px;
+  background:var(--slip);
+  box-shadow:0 0 0 1px var(--slip-edge),2px 2px 0 rgba(0,0,0,.05);
+  overflow-x:auto;
+}
+.diagram svg{display:block;height:calc(var(--line) * 9);width:auto}
+.d-box{fill:var(--paper);stroke:var(--ink);stroke-width:1.5}
+.d-box-2{fill:var(--paper);stroke:var(--muted);stroke-width:1.5}
+.d-title{fill:var(--ink-strong);font:700 15px var(--serif)}
+.d-sub{fill:var(--muted);font:400 11px var(--mono)}
+.d-lbl{fill:var(--ink);font:400 11px var(--mono)}
+.d-arrow{stroke:var(--ink);stroke-width:1.4;fill:none}
+.d-arrow-r{stroke:var(--margin-rule)}
+.d-arrow-b{stroke:var(--link)}
+
+.tw{
+  margin:var(--line) 0;overflow-x:auto;
+  background:var(--slip);
+  box-shadow:0 0 0 1px var(--slip-edge),2px 2px 0 rgba(0,0,0,.05);
+}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{
+  text-align:left;padding:0 14px;
+  line-height:var(--line);
+  box-shadow:inset 0 -1px 0 var(--slip-edge);
+  vertical-align:top;
+}
+thead th{
+  font-family:var(--mono);font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);
+  box-shadow:inset 0 -1px 0 var(--ink);
+}
+tbody tr:last-child td{box-shadow:none}
+td code{white-space:nowrap}
+
+/* ---------------------------------------------------------------- callouts
+   Slips of note paper stuck onto the sheet: no border, a shadow that lifts
+   them off the page, a darker band of adhesive across the top and a corner
+   that has started to peel. Rotated a fraction of a degree - a transform
+   costs no layout, so the ruling underneath is untouched.
+   40 + 20 padding = two lines, so these stay whole multiples too - the air is
+   simply weighted to the top, where the writing starts */
+.callout{
+  --note:#FBF3C2;           /* the default pad: very light yellow */
+  --note-ink:#7A5B00;
+  position:relative;
+  margin:var(--line) 0;padding:40px 20px 20px;
+  /* The corner is cut out of the paper itself, not painted over: the note is
+     filled by a gradient that stops short of the bottom-right, so the sheet
+     shows through. It has to be done this way round - clip-path is applied
+     AFTER filter, so clipping the corner would clip the shadow off with it,
+     and box-shadow would draw a full rectangle ignoring the cut. A gradient
+     leaves a genuinely transparent corner, and drop-shadow traces it.
+     14.15px along the 315deg axis = a 20px x 20px triangle. */
+  background-color:transparent;
+  background-image:
+    linear-gradient(to bottom,
+      rgba(16,19,25,.045) 0 var(--line),
+      transparent var(--line)),
+    linear-gradient(315deg,
+      transparent 0 14.15px,
+      var(--note) 14.15px);
+  filter:drop-shadow(0 1px 0 rgba(16,19,25,.10))
+         drop-shadow(0 3px 5px rgba(16,19,25,.10));
+  transform:rotate(-.35deg);
+}
+.callout:nth-of-type(even){transform:rotate(.4deg)}
+/* the underside of the fold: one flat tone, turned back on itself */
+.callout::after{
+  content:"";position:absolute;right:0;bottom:0;
+  width:20px;height:20px;
+  background:linear-gradient(315deg,
+    transparent 0 50%,
+    rgba(16,19,25,.13) 50% 100%);
+}
+.callout > :last-child{margin-bottom:0}
+/* a note ending a section needs no margin of its own - the gap between
+   sections already supplies the air, and doubling it opens a hole */
+.callout:last-child{margin-bottom:0}
+.callout .label{
+  margin:0;
+  font-family:var(--mono);font-size:11px;line-height:var(--line);
+  letter-spacing:.14em;text-transform:uppercase;
+  color:var(--note-ink);
+}
+.callout.warn{--note:#FBE1DC;--note-ink:#9E2B20}   /* very light red */
+.callout.tip {--note:#E4F1DD;--note-ink:#2A6B3F}   /* very light green */
+
+.foot{
+  margin-top:calc(var(--line) * 2);padding-top:var(--line);
+  border-top:1px solid var(--paper-edge);
+  font-family:var(--mono);font-size:12px;line-height:var(--line);
+  color:var(--muted);
+}
+
+/* ------------------------------------------------------------ responsive */
+@media (max-width:1120px){
+  :root{--sheet-w:100%}
+  .sheet{margin-left:16px;margin-right:16px}
+}
+@media (max-width:860px){
+  /* the margin folds to the top of the page and the quicklinks sit across it */
+  :root{--margin-w:0px}
+  .sheet::before,.sheet::after{display:none}
+  .sheet-head{padding:var(--line) 24px 0}
+  .sheet-grid{grid-template-columns:minmax(0,1fr)}
+  .sheet-margin{
+    padding:var(--line) 24px 0;
+    border-bottom:1px solid var(--paper-edge);
+  }
+  .quicklinks{position:static}
+  .quicklinks ol{
+    display:flex;flex-wrap:wrap;column-gap:18px;
+  }
+  .quicklinks a{text-indent:0;padding-left:0}
+  .quicklinks a::before{width:auto;margin-right:4px}
+  .margin-out{display:flex;gap:18px;flex-wrap:wrap}
+  .sheet-body{padding:var(--line) 24px calc(var(--line) * 2)}
+}
+@media (max-width:520px){
+  .sheet{margin-left:0;margin-right:0}
+  h2{font-size:25px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  h1 u{animation:none;background-image:none;
+       color:var(--ink-strong);-webkit-text-fill-color:currentColor}
+  h1 u::after{animation:none;transform:scaleX(1)}
+}
+
+@media print{
+  body{background:#fff}
+  .sheet{box-shadow:none;max-width:none;margin:0}
+  .sheet-margin,.copy{display:none}
+  .sheet-grid{grid-template-columns:minmax(0,1fr)}
+}
 </style>
+</head>
+<body>
 
-<h1>sloppdf</h1>
-<p class="sub">A PDF file that asks a language model for a story, over the
-internet, while you are reading it.</p>
+<a class="skip" href="#main">Skip to content</a>
 
-<a class="dl" href="/slop.pdf">Download the PDF</a>
+<article class="sheet">
 
-<p class="warn"><strong>Open it in Adobe Acrobat or Acrobat Reader.</strong>
-It will not work in Chrome, Firefox, Edge, or Preview &mdash; their PDF viewers
-implement no networking at all.</p>
+  <header class="sheet-head">
+    <div>
+      <h1>A PDF that <span class="sub">writes...
+        <span class="spark" aria-hidden="true">&#10024;</span><u>Slop</u><span class="spark" aria-hidden="true">&#10024;</span></span></h1>
+      <p class="head-lede">Fetches a relay from within Adobe Acrobat, try it now, download the pdf below! :D</p>
+      <p class="head-cta">
+        <a class="btn" href="/slop.pdf">Download slop.pdf</a>
+        <a class="btn btn-2" href="#how-it-works">How it works</a>
+      </p>
+    </div>
+  </header>
 
-<h2>How it works</h2>
+  <div class="sheet-grid">
 
-<p>PDF files can contain JavaScript. Acrobat gives that JavaScript exactly one way
-to reach the network: <code>Doc.submitForm()</code>, which posts the form's fields
-to a URL. The trick is the reply &mdash; if the server answers with an
-<code>application/vnd.fdf</code> document, Acrobat parses it and writes the values
-straight back into the form's fields. That is the return channel.</p>
+    <!-- ------------------------------------------ the margin: quicklinks -->
+    <aside class="sheet-margin">
+      <nav class="quicklinks" aria-label="On this page">
+        <h2>Contents</h2>
+        <ol id="qlList"></ol>
+        <div class="margin-out">
+          <a href="/slop.pdf">the pdf &rarr;</a>
+          <a href="https://github.com/vandorena/sloppdf">source &rarr;</a>
+          <a href="https://github.com/ading2210/linuxpdf">linuxpdf &rarr;</a>
+        </div>
+      </nav>
+    </aside>
 
-<ol>
-  <li>You type an optional topic and click <em>Generate</em>.</li>
-  <li>The PDF posts that topic to a small relay server.</li>
-  <li>The relay asks the model for a story, and immediately replies with a job
-      number &mdash; not the story.</li>
-  <li>The PDF re-submits every few seconds asking whether that job is done.</li>
-  <li>When it is, the relay sends the story back as FDF, and the text appears in
-      the page you are looking at.</li>
-</ol>
+    <!-- ------------------------------------------------- the written page -->
+    <main class="sheet-body" id="main">
 
-<h2>Why the relay exists</h2>
+      <section id="overview">
+        <h2>Overview</h2>
 
-<p>Two reasons, both unavoidable.</p>
+        <p>A <strong>PDF</strong> that calls Qwen via a relay to generate slop stories and displays the result in Adobe Acrobat.</p>
 
-<p><strong>The API key.</strong> Anyone who opens a PDF can read every byte of it,
-so a key stored inside the document is a published key. The relay holds it
-instead.</p>
+        <p>Working because the PDF spec's supports javascript, and can recieve inputs through form handling.</p>
 
-<p><strong>Acrobat will not wait.</strong> Writing a story takes seconds, and
-Acrobat drops a <code>submitForm</code> connection long before a slow one
-finishes &mdash; the reply is simply lost. So the relay never makes the PDF wait:
-it hands back a job number in milliseconds and lets the document poll.</p>
+        <div class="callout warn">
+          <p class="label">this only works on Adobe Acrobat</p>
+          <p>This document is Adobe desktop/mac only by nature -- mainly because adobe was the only pdf viewing company that fully implemented the spec :p <br>
+               Your mileage may vary if you use something else (<a href="mailto:alexvd+sloppdf@brown.edu">email me</a> if you find something else that works!).</p>
+        </div>
+      </section>
 
-<h2>Caveats</h2>
+      <section id="requirements">
+        <h2>Requirements</h2>
 
-<p>Acrobat will ask once whether to allow the document to contact the relay.
-That is its cross-domain check &mdash; a PDF opened from your disk has no origin
-of its own, so every response counts as cross-domain. Choose <em>Allow</em>.</p>
+        <ul class="body">
+          <li><strong>Adobe Acrobat</strong> or <strong>Acrobat
+            Reader</strong>, on Windows or macOS.</li>
+          <li>A network connection </li>
+        </ul>
 
-<p>The window freezes for a moment on each poll, because <code>submitForm</code>
-blocks the interface. The status line counts the seconds so you can tell it is
-still working.</p>
+        <p>Adobe thinks I'm trying to attack you when it realises a request is being sent out.
+              So it'll ask for your permission. Choose <strong>Allow</strong> -- I won't do anything too bad >:)</p>
 
-<footer>Built on <a href="https://github.com/ading2210/linuxpdf">linuxpdf</a> by
-ading2210, which runs an entire RISC-V Linux emulator in a PDF the same way.</footer>
+      </section>
+
+      <section id="how-it-works">
+        <h2>How it works</h2>
+
+        <p>Acrobat exposes exactly one network API to an ordinary document:
+          <code>Doc.submitForm()</code>, which posts the form's fields to a URL.
+          Unlike <code>Net.HTTP.request</code> it is not security restricted, and
+          it works in the free Reader outside a browser.</p>
+
+        <p>The trick is the reply. When the server answers with
+          <code>Content-Type: application/vnd.fdf</code>, Acrobat parses the FDF
+          and imports the values <strong>into the document that made the
+          request</strong>. Out is a form post; back is a form fill. That round
+          trip is the whole mechanism.</p>
+
+        <div class="diagram">
+          <svg viewBox="0 0 900 270" role="img"
+               aria-label="slop.pdf posts a topic to the relay, which replies immediately with a job id, starts generation against ai.hackclub.com, and hands the story back on a later poll.">
+            <defs>
+              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5"
+                      markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="context-stroke"/>
+              </marker>
+            </defs>
+
+            <rect class="d-box" x="8" y="40" width="210" height="170"/>
+            <text class="d-title" x="26" y="70">slop.pdf</text>
+            <text class="d-sub"   x="26" y="94">topic</text>
+            <rect x="26" y="102" width="174" height="18" fill="none"
+                  stroke="var(--slip-edge)" stroke-width="1.5"/>
+            <text class="d-sub"   x="26" y="148">status</text>
+            <rect x="26" y="156" width="174" height="18" fill="none"
+                  stroke="var(--slip-edge)" stroke-width="1.5"/>
+            <rect x="26" y="182" width="88" height="20" fill="none"
+                  stroke="var(--margin-rule)" stroke-width="1.5"/>
+            <text x="36" y="196" fill="var(--margin-rule)"
+                  style="font:400 11px var(--mono)">generate</text>
+
+            <rect class="d-box" x="345" y="40" width="210" height="170"/>
+            <text class="d-title" x="363" y="70">relay</text>
+            <text class="d-sub"   x="363" y="94">/api/story</text>
+            <text class="d-sub"   x="363" y="148">holds the key</text>
+            <text class="d-sub"   x="363" y="168">holds the jobs</text>
+
+            <rect class="d-box-2" x="682" y="80" width="210" height="90"/>
+            <text class="d-title" x="700" y="118">the model</text>
+            <text class="d-sub"   x="700" y="142">ai.hackclub.com</text>
+
+            <text class="d-lbl" x="228" y="76">1. POST topic</text>
+            <path class="d-arrow" d="M222 88 L341 88" marker-end="url(#ah)"/>
+
+            <text class="d-lbl" x="228" y="128">2. job id (ms)</text>
+            <path class="d-arrow d-arrow-b" d="M341 140 L222 140" marker-end="url(#ah)"/>
+
+            <text class="d-lbl" x="228" y="182">3. poll / 4s</text>
+            <path class="d-arrow d-arrow-r" d="M222 194 L341 194" marker-end="url(#ah)"/>
+
+            <path class="d-arrow" d="M559 108 L678 108" marker-end="url(#ah)"/>
+            <text class="d-lbl" x="566" y="96">prompt</text>
+            <path class="d-arrow d-arrow-b" d="M678 152 L559 152" marker-end="url(#ah)"/>
+            <text class="d-lbl" x="566" y="172">story</text>
+
+            <text class="d-sub" x="8" y="250">every request completes in 3–50ms</text>
+          </svg>
+        </div>
+
+        <p>The document script never waits on the model. It fires a submit, and
+          the relay answers in milliseconds with a job id rather than a story:</p>
+
+        <figure class="code" data-lang="js">
+          <figcaption><span class="grow">httpdemo.js</span><button class="copy" type="button">Copy</button></figcaption>
+<pre><code class="lang-js">function submit_now() {
+  DOC.submitForm({
+    cURL: RELAY_URL + "#FDF",
+    cSubmitAs: submit_mode,
+    aFields: ["topic", "job"],
+    bEmpty: true
+  });
+}</code></pre>
+        </figure>
+
+        <div class="callout">
+          <p class="label">Note</p>
+          <p>At document level <code>this</code> is the <code>Doc</code>, which
+            is why the script opens with <code>var DOC = this;</code>. Upstream
+            linuxpdf reaches fields through <code>globalThis.getField()</code> —
+            that works in PDFium, but in Acrobat <code>getField</code> is a
+            <code>Doc</code> method and the global does not exist.</p>
+        </div>
+      </section>
+
+      <section id="return-channel">
+        <h2>The return channel</h2>
+
+        <p>An FDF file is a small container of field names and values. The relay
+          builds one by hand for every reply — three fields, every time:</p>
+
+        <figure class="code" data-lang="fdf">
+          <figcaption><span class="grow">the reply, unwrapped</span><button class="copy" type="button">Copy</button></figcaption>
+<pre><code class="lang-fdf">%FDF-1.2
+1 0 obj
+&lt;&lt; /FDF &lt;&lt; /Fields [
+&lt;&lt; /T(status)   /V(OK - 1284 chars in 17s) &gt;&gt;
+&lt;&lt; /T(response) /V(The vending machine had opinions...) &gt;&gt;
+&lt;&lt; /T(job)      /V() &gt;&gt;
+] &gt;&gt; &gt;&gt;
+endobj
+trailer
+&lt;&lt; /Root 1 0 R &gt;&gt;
+%%EOF</code></pre>
+        </figure>
+
+        <p>Two details in there are load-bearing. There is no <code>/F</code> or
+          <code>/UF</code> key — Adobe's Enhanced Security rules require its
+          absence for a document opened from the local filesystem. And only
+          <code>/Fields</code> injection is used: an FDF can also carry
+          <code>/JavaScript</code>, but Enhanced Security blocks that unless the
+          file sits in a privileged location, so nothing here depends on it.</p>
+
+        <h3>Encoding the text</h3>
+
+        <p>Model output is full of em dashes and smart quotes, and the field's
+          font is WinAnsi. So the encoder emits a literal string
+          <code>(...)</code> when the text is pure ASCII — keeping the FDF
+          readable while debugging — and a UTF-16BE hex string
+          <code>&lt;feff...&gt;</code> otherwise, where the leading byte-order
+          mark is what identifies it as Unicode.</p>
+
+        <div class="callout warn">
+          <p class="label">Newlines are a trap</p>
+          <p>Acrobat's line separator inside a multiline field is a carriage
+            return, and it must be written as the two-character escape
+            <code>\r</code>. A raw CR byte inside a literal string is read by the
+            specification as <code>\n</code>, which silently changes the
+            separator.</p>
+        </div>
+      </section>
+
+      <section id="polling">
+        <h2>The polling loop</h2>
+
+        <p>Acrobat will not hold a <code>submitForm</code> connection open for a
+          slow response. The first working version called the model inline, took
+          15–35 seconds, and Acrobat dropped the socket before the reply could be
+          written — the relay logged
+          <code>ConnectionResetError: [WinError 10054]</code> after returning
+          200, and the document showed nothing. There is no timeout setting to
+          raise.</p>
+
+        <p>So the document polls. It re-submits with the job id every four
+          seconds until the status line says the job is done:</p>
+
+        <figure class="code" data-lang="js">
+          <figcaption><span class="grow">httpdemo.js</span><button class="copy" type="button">Copy</button></figcaption>
+<pre><code class="lang-js">var POLL_INTERVAL = 4000; // ms between polls
+var POLL_LIMIT = 75;      // 75 * 4s = 5 minutes
+
+// the relay writes "OK - ..." when the story has arrived and
+// "relay error: ..." when it failed. anything else means keep waiting.
+function is_finished(status) {
+  return status.indexOf("OK -") === 0 || status.indexOf("relay error") === 0;
+}
+
+function schedule_poll(attempt) {
+  // app.setTimeOut takes a string of javascript, not a function
+  app.setTimeOut("try {poll_once(" + attempt + ")} catch (e) {app.alert(e)}",
+                 POLL_INTERVAL);
+}</code></pre>
+        </figure>
+
+        <div class="callout warn">
+          <p class="label">Never read a field straight after submitting</p>
+          <p>The FDF reply has not been imported at that point, so you read stale
+            text. The first version scheduled its opening poll only if the status
+            already said <code>WORKING</code> — which it never did that early. So
+            polling never started, and every click silently leaked a new job on
+            the relay while the document ignored the results. The first poll is
+            now scheduled unconditionally, and <code>is_finished()</code> decides
+            when to <em>stop</em>.</p>
+        </div>
+
+        <p>There is also a <strong>Poll now</strong> button. If
+          <code>app.setTimeOut</code> ever fails to fire in this context, that
+          button still retrieves the result — and it is the quickest way to tell
+          the two failure modes apart. The <code>job</code> field is left visible
+          for the same reason: if this breaks, whether the id survived the FDF
+          import is the first thing to check.</p>
+      </section>
+
+      <section id="relay">
+        <h2>Why the relay exists</h2>
+
+        <p>Two reasons, both unavoidable.</p>
+
+        <h3>It holds the key</h3>
+        <p>Anyone who opens a PDF can read every byte of it, so a key embedded in
+          the document is a published key. The document just asks for a story;
+          the relay holds the credential. The proxy hop is not only a limitation
+          — it is the thing that makes distributing the file safe.</p>
+
+        <h3>It answers instantly</h3>
+        <p>The relay never calls the model from the request handler. It writes a
+          job to Redis, replies with the id, and continues generating after the
+          response has been sent via <code>waitUntil()</code>. Job state lives in
+          Redis rather than memory because Vercel functions are stateless and two
+          polls will not hit the same instance.</p>
+
+        <figure class="code" data-lang="js">
+          <figcaption><span class="grow">api/story.js</span><button class="copy" type="button">Copy</button></figcaption>
+<pre><code class="lang-js">const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+const job = { state: "running", started: Date.now(), story: "", error: "" };
+await redis.set(`job:${id}`, job, { ex: JOB_TTL });
+
+waitUntil(
+  generateStory(topic)
+    .then((story) =&gt; redis.set(`job:${id}`,
+      { ...job, state: "done", story }, { ex: JOB_TTL }))
+    .catch((e) =&gt; redis.set(`job:${id}`,
+      { ...job, state: "error", error: e.message }, { ex: JOB_TTL }))
+);</code></pre>
+        </figure>
+
+        <div class="callout">
+          <p class="label">Note</p>
+          <p>Errors are shown, not swallowed. A missing key or an upstream
+            failure comes back as an FDF that fills <code>status</code> with the
+            reason, so the document tells you what went wrong instead of sitting
+            blank.</p>
+        </div>
+      </section>
+
+      <section id="model">
+        <h2>The model</h2>
+
+        <p>The default is <code>qwen/qwen3-32b</code>, measured at 13–20 seconds
+          per story. Speed is the reason for the choice, not quality: a Vercel
+          Hobby function is killed at 60 seconds and <code>waitUntil</code> work
+          dies with it, so anything slower leaves jobs that never finish.</p>
+
+        <div class="callout warn">
+          <p class="label">Reasoning models are a trap here</p>
+          <p>They burn 300–900 tokens thinking before writing a word, and take
+            anywhere from 16 seconds to over three minutes for the same prompt.
+            If <code>max_tokens</code> does not cover the thinking <em>as well
+            as</em> the story, the API returns
+            <code>finish_reason: "length"</code> with <code>content: null</code>
+            — no story, no error, nothing. That is why <code>MAX_TOKENS</code>
+            defaults to 3000 rather than the ~500 a 300-word story needs, and why
+            both relays raise a message naming this cause instead of failing on a
+            null.</p>
+        </div>
+
+        <p>Note also that a leading <code>~</code> on a model id, as in
+          <code>~deepseek/deepseek-v4-flash-latest</code>, is part of the id and
+          not a typo — it marks a floating alias on the proxy. Without it the API
+          answers <code>is not a valid model ID</code>.</p>
+
+        <div class="tw">
+          <table>
+            <thead>
+              <tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>HACKCLUB_AI_KEY</code></td><td>—</td><td>Required. The credential the relay holds.</td></tr>
+              <tr><td><code>HACKCLUB_AI_MODEL</code></td><td><code>qwen/qwen3-32b</code></td><td>Override the model.</td></tr>
+              <tr><td><code>HACKCLUB_AI_MAX_TOKENS</code></td><td><code>3000</code></td><td>Budget for thinking plus story.</td></tr>
+              <tr><td><code>HACKCLUB_AI_URL</code></td><td>Hack Club proxy</td><td>Override the endpoint.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The prompt itself is fixed (<code>BASE_PROMPT</code>, defined in both
+          relays — keep the two copies in sync), plus your topic if you typed
+          one, plus a short random entropy token. That token exists because the
+          prompt asks the model to be random, and because it stops any layer in
+          between from serving a cached completion.</p>
+      </section>
+
+      <section id="local">
+        <h2>Run it locally</h2>
+
+        <figure class="code" data-lang="sh">
+          <figcaption><span class="grow">setup</span><button class="copy" type="button">Copy</button></figcaption>
+<pre><code class="lang-sh">python3 -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+
+cp .env.example .env    # put your key in HACKCLUB_AI_KEY</code></pre>
+        </figure>
+
+        <p><code>.env</code> is gitignored. A real environment variable overrides
+          the file, so CI and one-off overrides still work.</p>
+
+        <figure class="code" data-lang="sh">
+          <figcaption><span class="grow">two terminals</span><button class="copy" type="button">Copy</button></figcaption>
+<pre><code class="lang-sh"># terminal 1 - the relay
+.venv/Scripts/python.exe tools/dev_relay.py 8000
+
+# terminal 2 - a pdf pointed at it. note out/, not public/
+.venv/Scripts/python.exe gen_http_pdf.py out/slop.pdf local</code></pre>
+        </figure>
+
+        <p>Open <code>out/slop.pdf</code> in Acrobat, optionally type a topic, and
+          click <em>Generate</em>. The dev relay is stdlib-only and serves the
+          same <code>public/</code> directory Vercel does, so
+          <code>http://127.0.0.1:8000/</code> shows this very page. Routes are
+          <code>/</code>, <code>/slop.pdf</code>, <code>/crossdomain.xml</code>
+          and <code>POST /api/story</code>. Static files are read off disk per
+          request, so a rebuild needs no restart.</p>
+
+        <div class="callout warn">
+          <p class="label">Keep the two builds straight</p>
+          <p>The relay URL is baked in at generation time. A PDF built with
+            <code>local</code> will keep trying <code>127.0.0.1</code> on whoever
+            opens it.</p>
+        </div>
+
+        <div class="tw">
+          <table>
+            <thead>
+              <tr><th scope="col">File</th><th scope="col">Talks to</th><th scope="col">Purpose</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>public/slop.pdf</code></td><td><code>https://slop.alexvd.dev/api/story</code></td><td>Committed, deployed</td></tr>
+              <tr><td><code>out/slop.pdf</code></td><td><code>http://127.0.0.1:8000/api/story</code></td><td>Local testing, gitignored</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout tip">
+          <p class="label">Use 127.0.0.1, not localhost</p>
+          <p>On Windows <code>localhost</code> resolves to <code>::1</code>
+            first. With the dev relay bound to IPv4 only, every request pays a ~2
+            second fallback penalty. The same relay over <code>127.0.0.1</code>
+            answers in 3ms.</p>
+        </div>
+      </section>
+
+      <section id="deploy">
+        <h2>Deploying</h2>
+
+        <p>The public build runs on Vercel at
+          <a href="https://slop.alexvd.dev">slop.alexvd.dev</a>.</p>
+
+        <ol class="body">
+          <li>Add the <strong>Upstash Redis</strong> (or Vercel KV) integration.
+            It sets <code>KV_REST_API_URL</code> / <code>KV_REST_API_TOKEN</code>;
+            the code also accepts the <code>UPSTASH_REDIS_REST_URL</code> pair.</li>
+          <li>Set <code>HACKCLUB_AI_KEY</code> in the project's environment
+            variables.</li>
+          <li>Point the domain at the project.</li>
+        </ol>
+
+        <p>Rebuild the PDF after any change to <code>httpdemo.js</code> or
+          <code>gen_http_pdf.py</code>, and commit it. It is a build artefact,
+          but Vercel deploys from git and has no Python toolchain here:</p>
+
+        <figure class="code" data-lang="sh">
+          <figcaption><span class="grow">rebuild before committing</span><button class="copy" type="button">Copy</button></figcaption>
+<pre><code class="lang-sh">.venv/Scripts/python.exe gen_http_pdf.py public/slop.pdf</code></pre>
+        </figure>
+
+        <div class="callout warn">
+          <p class="label">Check the production branch</p>
+          <p>Vercel's production branch defaults to the repository's default
+            branch. Make sure that is the branch this code actually lives on, or
+            the deploy will serve nothing and <code>/api/story</code> will
+            404.</p>
+        </div>
+      </section>
+
+      <section id="layout">
+        <h2>Project layout</h2>
+
+        <div class="tw">
+          <table>
+            <thead>
+              <tr><th scope="col">Path</th><th scope="col">What it is</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>gen_http_pdf.py</code></td><td>Builds the PDF</td></tr>
+              <tr><td><code>pdfform.py</code></td><td>AcroForm widget helpers</td></tr>
+              <tr><td><code>httpdemo.js</code></td><td>The document-level JavaScript</td></tr>
+              <tr><td><code>tools/dev_relay.py</code></td><td>Local relay, stdlib only</td></tr>
+              <tr><td><code>api/story.js</code></td><td>The deployed relay (Vercel)</td></tr>
+              <tr><td><code>public/</code></td><td>This page, the policy file, the built PDF</td></tr>
+              <tr><td><code>vercel.json</code></td><td><code>maxDuration</code> and the policy file's Content-Type</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="pitfalls">
+        <h2>What silently breaks it</h2>
+
+        <h3>The policy file, and its Content-Type</h3>
+        <p>A PDF opened from disk has <strong>no origin</strong>, so Acrobat
+          treats every response as cross-domain and drops it unless the host
+          explicitly permits it. Vercel would serve <code>.xml</code> as
+          <code>application/xml</code>; Adobe expects
+          <code>text/x-cross-domain-policy</code>, which is why
+          <code>vercel.json</code> overrides it. Verify after every deploy:</p>
+
+        <figure class="code" data-lang="sh">
+          <figcaption><span class="grow">verify the policy file</span><button class="copy" type="button">Copy</button></figcaption>
+<pre><code class="lang-sh">curl -i https://slop.alexvd.dev/crossdomain.xml</code></pre>
+        </figure>
+
+        <h3>The Required flag</h3>
+        <p><code>/Ff</code> flags are <strong>1-based bit positions</strong>, so
+          bit 1 is value <code>1</code> and bit 2 is value <code>2</code>:</p>
+
+        <div class="tw">
+          <table>
+            <thead>
+              <tr><th scope="col">Bit</th><th scope="col">Value</th><th scope="col">Flag</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td><code>1</code></td><td>ReadOnly</td></tr>
+              <tr><td>2</td><td><code>2</code></td><td><strong>Required</strong></td></tr>
+              <tr><td>13</td><td><code>4096</code></td><td>Multiline</td></tr>
+              <tr><td>17</td><td><code>65536</code></td><td>Pushbutton</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Writing <code>Ff = 2</code> intending ReadOnly actually marks the
+          field <strong>Required</strong>, and Acrobat then refuses to submit the
+          form at all — <em>"At least one required field was empty."</em> This is
+          easy to miss because Chrome ignores it entirely: upstream linuxpdf set
+          <code>Ff = 2</code> on all 310 of its fields and nothing ever
+          complained, since that document never submits a form.</p>
+
+        <h3>The missing AcroForm dictionary</h3>
+        <p>Upstream linuxpdf emits no <code>/AcroForm</code>. Chrome tolerates
+          that and scavenges widgets off the page's <code>/Annots</code>; Acrobat
+          resolves <code>getField()</code> names <strong>only</strong> through
+          <code>/AcroForm /Fields</code>, so every field was invisible to
+          JavaScript there. Three things bite when fixing it with pdfrw:</p>
+
+        <ul class="body">
+          <li><code>PdfWriter.addpage()</code> resets
+            <code>writer._trailer</code>, so <code>/AcroForm</code> must be
+            attached <em>after</em> <code>addpage()</code> or it is silently
+            discarded.</li>
+          <li>pdfrw has no boolean type — <code>NeedAppearances=True</code>
+            serialises as <code>True</code>, which is invalid PDF. Use
+            <code>PdfObject("true")</code>.</li>
+          <li>Fields must be <code>indirect = True</code>, or pdfrw duplicates
+            each one that appears in both <code>/Annots</code> and
+            <code>/Fields</code> — a <code>log.warning</code> only — producing
+            two widgets sharing one name.</li>
+        </ul>
+
+        <h3>Generation must fit the time limit</h3>
+        <p>Vercel Hobby caps an invocation at 60 seconds, and
+          <code>waitUntil</code> work dies with the function. Hence the fast
+          default model and <code>JOB_DEADLINE = 55</code>, which reports a clear
+          error rather than letting the document poll for five minutes.</p>
+
+        <p>The full internals write-up, including everything above in more
+          detail, lives in <code>docs/http-demo.md</code> in the repository.</p>
+      </section>
+
+      <section id="credits">
+        <h2>Credits &amp; licence</h2>
+
+        <p>Built by <strong>Alex Van Doren</strong>, one of the developers behind
+          Stardance — as something to send to friends on the way to Brown.</p>
+
+        <p>This is a fork of
+          <a href="https://github.com/ading2210/linuxpdf">linuxpdf</a> by
+          <a href="https://github.com/ading2210/">ading2210</a>, which runs an
+          entire RISC-V Linux emulator inside a PDF using the same tricks.
+          <code>pdfform.py</code> is derived from that project's
+          <code>gen_pdf.py</code>. It is worth your time. See also
+          <a href="https://github.com/ading2210/doompdf">DoomPDF</a>, and
+          <a href="https://bellard.org/tinyemu/">TinyEMU</a> by Fabrice Bellard,
+          which linuxpdf's emulator is based on.</p>
+
+        <p>Licensed <strong>GNU GPL v3</strong>, inherited from linuxpdf.
+          Copyright © 2026 vandorena. Derived from ading2210/linuxpdf, copyright
+          © 2025 ading2210.</p>
+
+        <p class="foot">one static html file &middot; no dependencies &middot; no
+          build step &middot; no tracking</p>
+      </section>
+
+    </main>
+  </div>
+</article>
+
+<script>
+(function () {
+  "use strict";
+
+  // ------------------------------------------- the margin quicklinks + spy
+  var sections = [].slice.call(document.querySelectorAll(".sheet-body section[id]"));
+  var qlList = document.getElementById("qlList");
+
+  sections.forEach(function (sec) {
+    var h = sec.querySelector("h2");
+    if (!h) return;
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    a.textContent = h.textContent.trim();
+    a.dataset.for = sec.id;
+    li.appendChild(a);
+    qlList.appendChild(li);
+  });
+
+  var links = [].slice.call(document.querySelectorAll("#qlList a"));
+
+  function markActive(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  // track every section on screen and mark the topmost, so the pointer in the
+  // margin follows the reader rather than jumping at each boundary
+  var onScreen = new Set();
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) onScreen.add(entry.target.id);
+      else onScreen.delete(entry.target.id);
+    });
+    for (var i = 0; i < sections.length; i++) {
+      if (onScreen.has(sections[i].id)) { markActive(sections[i].id); return; }
+    }
+  }, { rootMargin: "-90px 0px -55% 0px", threshold: 0 });
+
+  sections.forEach(function (s) { observer.observe(s); });
+
+  // ---------------------------------------------------------- copy button
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    // http on a lan address has no clipboard api - fall back to a scratch node
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      ok ? resolve() : reject();
+    });
+  }
+
+  document.querySelectorAll("figure.code").forEach(function (fig) {
+    var btn = fig.querySelector(".copy");
+    var code = fig.querySelector("code");
+    if (!btn || !code) return;
+    btn.addEventListener("click", function () {
+      copyText(code.textContent).then(function () {
+        btn.textContent = "Copied";
+        btn.dataset.done = "1";
+      }, function () {
+        btn.textContent = "Ctrl+C";
+      });
+      setTimeout(function () {
+        btn.textContent = "Copy";
+        delete btn.dataset.done;
+      }, 1800);
+    });
+  });
+
+  // ----------------------------------------------------- syntax highlight
+  // a deliberately small tokeniser. every pattern below uses non-capturing
+  // groups only, so group n of the combined regex is rule n.
+  var GRAMMARS = {
+    js: [
+      ["c", /\/\/[^\n]*|\/\*[\s\S]*?\*\//],
+      ["s", /`(?:\\[\s\S]|[^\\`])*`|"(?:\\[\s\S]|[^\\"])*"|'(?:\\[\s\S]|[^\\'])*'/],
+      ["k", /\b(?:async|await|break|case|catch|class|const|continue|default|delete|do|else|export|extends|finally|for|from|function|if|import|in|instanceof|let|new|of|return|switch|this|throw|try|typeof|var|void|while|yield|true|false|null|undefined)\b/],
+      ["n", /\b(?:0[xX][\da-fA-F]+|\d+(?:\.\d+)?)\b/],
+      ["f", /\b[A-Za-z_$][\w$]*(?=\s*\()/],
+      ["p", /=>|\.\.\.|[{}[\]();,.:?=+\-*/%<>!&|~^]+/]
+    ],
+    sh: [
+      ["c", /#[^\n]*/],
+      ["s", /"(?:\\[\s\S]|[^\\"])*"|'[^']*'/],
+      ["k", /\b(?:cd|cp|curl|echo|export|mkdir|mv|pip|python|python3|rm|source|sudo)\b/],
+      ["n", /(?:^|\s)-{1,2}[A-Za-z][\w-]*/],
+      ["p", /[|&;<>()$]+/]
+    ],
+    py: [
+      ["c", /#[^\n]*/],
+      ["s", /"""[\s\S]*?"""|"(?:\\[\s\S]|[^\\"])*"|'(?:\\[\s\S]|[^\\'])*'/],
+      ["k", /\b(?:and|as|def|elif|else|for|from|if|import|in|is|not|or|pass|raise|return|try|except|while|with|True|False|None)\b/],
+      ["n", /\b\d+(?:\.\d+)?\b/],
+      ["f", /\b[A-Za-z_][\w]*(?=\s*\()/],
+      ["p", /[{}[\]();,.:=+\-*/%<>!&|]+/]
+    ],
+    fdf: [
+      ["c", /^%[^\n]*/m],
+      ["s", /\((?:[^()\\]|\\[\s\S])*\)/],
+      ["k", /\/[A-Za-z]+/],
+      ["n", /\b\d+\b/],
+      ["p", /<<|>>|[[\]]/]
+    ]
+  };
+
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function highlight(src, lang) {
+    var rules = GRAMMARS[lang];
+    if (!rules) return esc(src);
+
+    var re = new RegExp(rules.map(function (r) {
+      return "(" + r[1].source + ")";
+    }).join("|"), "gm");
+
+    var out = "", last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+      if (m[0].length === 0) { re.lastIndex++; continue; }
+      if (m.index > last) out += esc(src.slice(last, m.index));
+      var cls = "p";
+      for (var i = 0; i < rules.length; i++) {
+        if (m[i + 1] !== undefined) { cls = rules[i][0]; break; }
+      }
+      out += '<span class="t-' + cls + '">' + esc(m[0]) + "</span>";
+      last = m.index + m[0].length;
+    }
+    return out + esc(src.slice(last));
+  }
+
+  document.querySelectorAll("figure.code").forEach(function (fig) {
+    var code = fig.querySelector("code");
+    if (!code) return;
+    code.innerHTML = highlight(code.textContent, fig.dataset.lang);
+  });
+})();
+</script>
+</body>
+</html>
