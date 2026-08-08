@@ -167,7 +167,7 @@ h1 u::after{
   color:var(--muted);
   max-width:none;
 }
-.head-cta{margin:var(--line) 0 calc(var(--line) * 2);display:flex;
+.head-cta{margin:var(--line) 0 calc(var(--line) / 4);display:flex;
           flex-wrap:wrap;gap:12px;align-items:center}
 .btn{
   display:inline-flex;align-items:center;gap:.55rem;
@@ -268,6 +268,10 @@ h2{
   color:var(--ink-strong);
 }
 section > h2:first-child{margin-top:0}
+/* the first heading on the page needs no band of air above it - the masthead
+   already provides it - so it starts one line higher. Still a whole band
+   removed, so everything below stays on its rule. */
+.sheet-body > section:first-of-type > h2:first-child{padding-top:0}
 h3{
   margin:var(--line) 0 0;
   font-size:21px;line-height:var(--line);
@@ -373,23 +377,54 @@ tbody tr:last-child td{box-shadow:none}
 td code{white-space:nowrap}
 
 /* ---------------------------------------------------------------- callouts
-   15 + 15 padding = one line, so these stay whole multiples too */
+   Slips of note paper stuck onto the sheet: no border, a shadow that lifts
+   them off the page, a darker band of adhesive across the top and a corner
+   that has started to peel. Rotated a fraction of a degree - a transform
+   costs no layout, so the ruling underneath is untouched.
+   40 + 20 padding = two lines, so these stay whole multiples too - the air is
+   simply weighted to the top, where the writing starts */
 .callout{
-  margin:var(--line) 0;padding:15px 20px;
-  background:var(--slip);
-  box-shadow:inset 3px 0 0 var(--link),0 0 0 1px var(--slip-edge);
+  --note:#FBF3C2;           /* the default pad: very light yellow */
+  --note-ink:#7A5B00;
+  position:relative;
+  margin:var(--line) 0;padding:40px 20px 20px;
+  /* The corner is cut out of the paper itself, not painted over: the note is
+     filled by a gradient that stops short of the bottom-right, so the sheet
+     shows through. It has to be done this way round - clip-path is applied
+     AFTER filter, so clipping the corner would clip the shadow off with it,
+     and box-shadow would draw a full rectangle ignoring the cut. A gradient
+     leaves a genuinely transparent corner, and drop-shadow traces it.
+     14.15px along the 315deg axis = a 20px x 20px triangle. */
+  background-color:transparent;
+  background-image:
+    linear-gradient(to bottom,
+      rgba(16,19,25,.045) 0 var(--line),
+      transparent var(--line)),
+    linear-gradient(315deg,
+      transparent 0 14.15px,
+      var(--note) 14.15px);
+  filter:drop-shadow(0 1px 0 rgba(16,19,25,.10))
+         drop-shadow(0 3px 5px rgba(16,19,25,.10));
+  transform:rotate(-.35deg);
+}
+.callout:nth-of-type(even){transform:rotate(.4deg)}
+/* the underside of the fold: one flat tone, turned back on itself */
+.callout::after{
+  content:"";position:absolute;right:0;bottom:0;
+  width:20px;height:20px;
+  background:linear-gradient(315deg,
+    transparent 0 50%,
+    rgba(16,19,25,.13) 50% 100%);
 }
 .callout > :last-child{margin-bottom:0}
 .callout .label{
   margin:0;
   font-family:var(--mono);font-size:11px;line-height:var(--line);
   letter-spacing:.14em;text-transform:uppercase;
-  color:var(--link);
+  color:var(--note-ink);
 }
-.callout.warn{box-shadow:inset 3px 0 0 var(--margin-rule),0 0 0 1px var(--slip-edge)}
-.callout.warn .label{color:var(--margin-rule)}
-.callout.tip{box-shadow:inset 3px 0 0 var(--t-s),0 0 0 1px var(--slip-edge)}
-.callout.tip .label{color:var(--t-s)}
+.callout.warn{--note:#FBE1DC;--note-ink:#9E2B20}   /* very light red */
+.callout.tip {--note:#E4F1DD;--note-ink:#2A6B3F}   /* very light green */
 
 .foot{
   margin-top:calc(var(--line) * 2);padding-top:var(--line);
@@ -487,7 +522,8 @@ td code{white-space:nowrap}
 
         <div class="callout warn">
           <p class="label">this only works on Adobe Acrobat</p>
-          <p>This document is Adobe desktop/mac only by nature -- mainly because adobe was the only pdf viewing company that fully implemented the spec :p <br> Your mileage may vary if you use something else.</p>
+          <p>This document is Adobe desktop/mac only by nature -- mainly because adobe was the only pdf viewing company that fully implemented the spec :p <br>
+               Your mileage may vary if you use something else (<a href="mailto:alexvd+sloppdf@brown.edu">email me</a> if you find something else that works!).</p>
         </div>
       </section>
 
