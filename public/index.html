@@ -254,7 +254,11 @@ h1 u::after{
    every rule below resolves to a whole multiple of --line, so a paragraph
    after a table still lands on a ruled line.                                */
 section{display:flow-root}
-section + section{margin-top:calc(var(--line) * 2)}
+section + section{margin-top:var(--line)}
+/* Overview ends on a note, and a note already carries its own air - the
+   shadow and the peeled corner read as space. One whole band back, so the
+   ruling underneath is unaffected. */
+#requirements{margin-top:0}
 /* A heading is set larger than the body, so its baseline sits lower in an
    identical line box. It takes one whole band of padding to keep the block a
    multiple of --line, then a visual nudge - which costs no height - to drop
@@ -417,6 +421,9 @@ td code{white-space:nowrap}
     rgba(16,19,25,.13) 50% 100%);
 }
 .callout > :last-child{margin-bottom:0}
+/* a note ending a section needs no margin of its own - the gap between
+   sections already supplies the air, and doubling it opens a hole */
+.callout:last-child{margin-bottom:0}
 .callout .label{
   margin:0;
   font-family:var(--mono);font-size:11px;line-height:var(--line);
