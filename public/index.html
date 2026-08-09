@@ -608,46 +608,14 @@ trailer
       </section>
 
       <section id="polling">
-        <h2>The polling loop</h2>
+        <h2>Polling???</h2>
 
-        <p>Acrobat will not hold a <code>submitForm</code> connection open for a
-          slow response. The first working version called the model inline, took
-          15–35 seconds, and Acrobat dropped the socket before the reply could be
-          written — the relay logged
-          <code>ConnectionResetError: [WinError 10054]</code> after returning
-          200, and the document showed nothing. There is no timeout setting to
-          raise.</p>
+        <p>Acrobat will not keep a <code>submitForm</code> connection open for a long time. The first working version took
+          15–35 seconds to respond
+          <img class="emoji" src="pf.png" alt="pf" width="22" height="22">, and Acrobat dropped the socket before the reply could be
+          written and sent so the document would just always show nothing.</p>
 
-        <p>So the document polls. It re-submits with the job id every four
-          seconds until the status line says the job is done:</p>
-
-        <figure class="code" data-lang="js">
-<pre><code class="lang-js">var POLL_INTERVAL = 4000; // ms between polls
-var POLL_LIMIT = 75;      // 75 * 4s = 5 minutes
-
-// the relay writes "OK - ..." when the story has arrived and
-// "relay error: ..." when it failed. anything else means keep waiting.
-function is_finished(status) {
-  return status.indexOf("OK -") === 0 || status.indexOf("relay error") === 0;
-}
-
-function schedule_poll(attempt) {
-  // app.setTimeOut takes a string of javascript, not a function
-  app.setTimeOut("try {poll_once(" + attempt + ")} catch (e) {app.alert(e)}",
-                 POLL_INTERVAL);
-}</code></pre>
-        </figure>
-
-        <div class="callout warn">
-          <p class="label">Never read a field straight after submitting</p>
-          <p>The FDF reply has not been imported at that point, so you read stale
-            text. The first version scheduled its opening poll only if the status
-            already said <code>WORKING</code> — which it never did that early. So
-            polling never started, and every click silently leaked a new job on
-            the relay while the document ignored the results. The first poll is
-            now scheduled unconditionally, and <code>is_finished()</code> decides
-            when to <em>stop</em>.</p>
-        </div>
+        <p>So I added job ids, and made the document poll. Now the inital request responds with an id, and later requests use the id to ask for the right response.</p>
 
         <p>There is also a <strong>Poll now</strong> button. If
           <code>app.setTimeOut</code> ever fails to fire in this context, that
