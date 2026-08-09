@@ -308,34 +308,41 @@ code{
   color:var(--ink-strong);
 }
 
+/* Code is stuck on as note paper too, built exactly like .callout: the same
+   cut corner, the same lift, the same fraction of a degree. The note tone is
+   kept near-neutral rather than yellow so the syntax colours still read.
+   The caption already occupies one whole --line, so it doubles as the band of
+   adhesive across the top - no extra padding is needed to make it. */
 figure.code{
+  --note:#F6F2E6;
+  position:relative;
   margin:var(--line) 0;
-  background:var(--slip);
-  box-shadow:0 0 0 1px var(--slip-edge),2px 2px 0 rgba(0,0,0,.05);
+  background-color:transparent;
+  background-image:
+    linear-gradient(to bottom,
+      rgba(16,19,25,.045) 0 var(--line),
+      transparent var(--line)),
+    linear-gradient(315deg,
+      transparent 0 14.15px,
+      var(--note) 14.15px);
+  filter:drop-shadow(0 1px 0 rgba(16,19,25,.10))
+         drop-shadow(0 3px 5px rgba(16,19,25,.10));
+  transform:rotate(.3deg);
 }
-figure.code figcaption{
-  display:flex;align-items:center;gap:1rem;
-  height:var(--line);
-  padding:0 6px 0 16px;
-  box-shadow:inset 0 -1px 0 var(--slip-edge);
-  font-family:var(--mono);font-size:11px;line-height:var(--line);
-  letter-spacing:.12em;text-transform:uppercase;
-  color:var(--muted);
+figure.code:nth-of-type(even){transform:rotate(-.4deg)}
+/* the underside of the fold, as on a callout */
+figure.code::after{
+  content:"";position:absolute;right:0;bottom:0;
+  width:20px;height:20px;
+  background:linear-gradient(315deg,
+    transparent 0 50%,
+    rgba(16,19,25,.13) 50% 100%);
 }
-figure.code figcaption .grow{flex:1}
-.copy{
-  appearance:none;background:transparent;
-  border:1px solid var(--slip-edge);
-  color:var(--muted);
-  font-family:var(--mono);font-size:10px;line-height:18px;
-  letter-spacing:.12em;text-transform:uppercase;
-  padding:0 8px;cursor:pointer;
-}
-.copy:hover{border-color:var(--ink);color:var(--ink-strong)}
-.copy[data-done="1"]{border-color:var(--t-s);color:var(--t-s)}
-/* 15 + 15 padding = one whole line, so the slip stays a multiple of --line */
+/* the band of adhesive is now bare paper - one whole line of it, taking the
+   place the caption used to fill, so the note keeps its height and the writing
+   below stays on the ruling. 15 + 15 on the pre is the second whole line. */
 figure.code pre{
-  margin:0;padding:15px 16px;
+  margin:0;padding:calc(var(--line) + 15px) 16px 15px;
   overflow-x:auto;
   font-family:var(--mono);font-size:14px;line-height:var(--line);
   color:var(--ink);tab-size:2;
@@ -486,7 +493,7 @@ td code{white-space:nowrap}
 @media print{
   body{background:#fff}
   .sheet{box-shadow:none;max-width:none;margin:0}
-  .sheet-margin,.copy{display:none}
+  .sheet-margin{display:none}
   .sheet-grid{grid-template-columns:minmax(0,1fr)}
 }
 </style>
@@ -578,7 +585,6 @@ td code{white-space:nowrap}
           builds one by hand for every reply — three fields, every time:</p>
 
         <figure class="code" data-lang="fdf">
-          <figcaption><span class="grow">the reply, unwrapped</span><button class="copy" type="button">Copy</button></figcaption>
 <pre><code class="lang-fdf">%FDF-1.2
 1 0 obj
 &lt;&lt; /FDF &lt;&lt; /Fields [
@@ -633,7 +639,6 @@ trailer
           seconds until the status line says the job is done:</p>
 
         <figure class="code" data-lang="js">
-          <figcaption><span class="grow">httpdemo.js</span><button class="copy" type="button">Copy</button></figcaption>
 <pre><code class="lang-js">var POLL_INTERVAL = 4000; // ms between polls
 var POLL_LIMIT = 75;      // 75 * 4s = 5 minutes
 
@@ -688,7 +693,6 @@ function schedule_poll(attempt) {
           polls will not hit the same instance.</p>
 
         <figure class="code" data-lang="js">
-          <figcaption><span class="grow">api/story.js</span><button class="copy" type="button">Copy</button></figcaption>
 <pre><code class="lang-js">const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 const job = { state: "running", started: Date.now(), story: "", error: "" };
 await redis.set(`job:${id}`, job, { ex: JOB_TTL });
@@ -727,7 +731,6 @@ waitUntil(
           <code>vercel.json</code> overrides it. Verify after every deploy:</p>
 
         <figure class="code" data-lang="sh">
-          <figcaption><span class="grow">verify the policy file</span><button class="copy" type="button">Copy</button></figcaption>
 <pre><code class="lang-sh">curl -i https://slop.alexvd.dev/crossdomain.xml</code></pre>
         </figure>
 
@@ -855,44 +858,6 @@ waitUntil(
   }, { rootMargin: "-90px 0px -55% 0px", threshold: 0 });
 
   sections.forEach(function (s) { observer.observe(s); });
-
-  // ---------------------------------------------------------- copy button
-  function copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(text);
-    }
-    // http on a lan address has no clipboard api - fall back to a scratch node
-    return new Promise(function (resolve, reject) {
-      var ta = document.createElement("textarea");
-      ta.value = text;
-      ta.setAttribute("readonly", "");
-      ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
-      document.body.appendChild(ta);
-      ta.select();
-      var ok = false;
-      try { ok = document.execCommand("copy"); } catch (e) {}
-      document.body.removeChild(ta);
-      ok ? resolve() : reject();
-    });
-  }
-
-  document.querySelectorAll("figure.code").forEach(function (fig) {
-    var btn = fig.querySelector(".copy");
-    var code = fig.querySelector("code");
-    if (!btn || !code) return;
-    btn.addEventListener("click", function () {
-      copyText(code.textContent).then(function () {
-        btn.textContent = "Copied";
-        btn.dataset.done = "1";
-      }, function () {
-        btn.textContent = "Ctrl+C";
-      });
-      setTimeout(function () {
-        btn.textContent = "Copy";
-        delete btn.dataset.done;
-      }, 1800);
-    });
-  });
 
   // ----------------------------------------------------- syntax highlight
   // a deliberately small tokeniser. every pattern below uses non-capturing
