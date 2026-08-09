@@ -284,6 +284,13 @@ h3{
 }
 p{margin:0 0 var(--line)}
 strong{font-weight:700;color:var(--ink-strong)}
+/* an emoji set into a line of prose. 22px inside a 30px band, so it cannot
+   push the line box open and knock the ruling out of step; nudged down to sit
+   on the serif's baseline rather than hanging from the cap height. */
+img.emoji{
+  display:inline-block;width:22px;height:22px;
+  vertical-align:-.28em;margin:0 .1em;
+}
 
 ul.body,ol.body{margin:0 0 var(--line);padding-left:26px}
 ul.body li,ol.body li{margin:0;line-height:var(--line)}
@@ -301,34 +308,41 @@ code{
   color:var(--ink-strong);
 }
 
+/* Code is stuck on as note paper too, built exactly like .callout: the same
+   cut corner, the same lift, the same fraction of a degree. The note tone is
+   kept near-neutral rather than yellow so the syntax colours still read.
+   The caption already occupies one whole --line, so it doubles as the band of
+   adhesive across the top - no extra padding is needed to make it. */
 figure.code{
+  --note:#F6F2E6;
+  position:relative;
   margin:var(--line) 0;
-  background:var(--slip);
-  box-shadow:0 0 0 1px var(--slip-edge),2px 2px 0 rgba(0,0,0,.05);
+  background-color:transparent;
+  background-image:
+    linear-gradient(to bottom,
+      rgba(16,19,25,.045) 0 var(--line),
+      transparent var(--line)),
+    linear-gradient(315deg,
+      transparent 0 14.15px,
+      var(--note) 14.15px);
+  filter:drop-shadow(0 1px 0 rgba(16,19,25,.10))
+         drop-shadow(0 3px 5px rgba(16,19,25,.10));
+  transform:rotate(.3deg);
 }
-figure.code figcaption{
-  display:flex;align-items:center;gap:1rem;
-  height:var(--line);
-  padding:0 6px 0 16px;
-  box-shadow:inset 0 -1px 0 var(--slip-edge);
-  font-family:var(--mono);font-size:11px;line-height:var(--line);
-  letter-spacing:.12em;text-transform:uppercase;
-  color:var(--muted);
+figure.code:nth-of-type(even){transform:rotate(-.4deg)}
+/* the underside of the fold, as on a callout */
+figure.code::after{
+  content:"";position:absolute;right:0;bottom:0;
+  width:20px;height:20px;
+  background:linear-gradient(315deg,
+    transparent 0 50%,
+    rgba(16,19,25,.13) 50% 100%);
 }
-figure.code figcaption .grow{flex:1}
-.copy{
-  appearance:none;background:transparent;
-  border:1px solid var(--slip-edge);
-  color:var(--muted);
-  font-family:var(--mono);font-size:10px;line-height:18px;
-  letter-spacing:.12em;text-transform:uppercase;
-  padding:0 8px;cursor:pointer;
-}
-.copy:hover{border-color:var(--ink);color:var(--ink-strong)}
-.copy[data-done="1"]{border-color:var(--t-s);color:var(--t-s)}
-/* 15 + 15 padding = one whole line, so the slip stays a multiple of --line */
+/* the band of adhesive is now bare paper - one whole line of it, taking the
+   place the caption used to fill, so the note keeps its height and the writing
+   below stays on the ruling. 15 + 15 on the pre is the second whole line. */
 figure.code pre{
-  margin:0;padding:15px 16px;
+  margin:0;padding:calc(var(--line) + 15px) 16px 15px;
   overflow-x:auto;
   font-family:var(--mono);font-size:14px;line-height:var(--line);
   color:var(--ink);tab-size:2;
@@ -479,7 +493,7 @@ td code{white-space:nowrap}
 @media print{
   body{background:#fff}
   .sheet{box-shadow:none;max-width:none;margin:0}
-  .sheet-margin,.copy{display:none}
+  .sheet-margin{display:none}
   .sheet-grid{grid-template-columns:minmax(0,1fr)}
 }
 </style>
@@ -509,11 +523,7 @@ td code{white-space:nowrap}
       <nav class="quicklinks" aria-label="On this page">
         <h2>Contents</h2>
         <ol id="qlList"></ol>
-        <div class="margin-out">
-          <a href="/slop.pdf">the pdf &rarr;</a>
-          <a href="https://github.com/vandorena/sloppdf">source &rarr;</a>
-          <a href="https://github.com/ading2210/linuxpdf">linuxpdf &rarr;</a>
-        </div>
+        
       </nav>
     </aside>
 
@@ -552,101 +562,30 @@ td code{white-space:nowrap}
         <h2>How it works</h2>
 
         <p>Acrobat exposes exactly one network API to an ordinary document:
-          <code>Doc.submitForm()</code>, which posts the form's fields to a URL.
-          Unlike <code>Net.HTTP.request</code> it is not security restricted, and
-          it works in the free Reader outside a browser.</p>
+          <code>Doc.submitForm()</code>, which posts the form's fields to a URL,
+          I think it was maybe meant as a low tech alternative to google forms.
+       </p>
 
-        <p>The trick is the reply. When the server answers with
-          <code>Content-Type: application/vnd.fdf</code>, Acrobat parses the FDF
-          and imports the values <strong>into the document that made the
-          request</strong>. Out is a form post; back is a form fill. That round
-          trip is the whole mechanism.</p>
-
-        <div class="diagram">
-          <svg viewBox="0 0 900 270" role="img"
-               aria-label="slop.pdf posts a topic to the relay, which replies immediately with a job id, starts generation against ai.hackclub.com, and hands the story back on a later poll.">
-            <defs>
-              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5"
-                      markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M0 0 L10 5 L0 10 z" fill="context-stroke"/>
-              </marker>
-            </defs>
-
-            <rect class="d-box" x="8" y="40" width="210" height="170"/>
-            <text class="d-title" x="26" y="70">slop.pdf</text>
-            <text class="d-sub"   x="26" y="94">topic</text>
-            <rect x="26" y="102" width="174" height="18" fill="none"
-                  stroke="var(--slip-edge)" stroke-width="1.5"/>
-            <text class="d-sub"   x="26" y="148">status</text>
-            <rect x="26" y="156" width="174" height="18" fill="none"
-                  stroke="var(--slip-edge)" stroke-width="1.5"/>
-            <rect x="26" y="182" width="88" height="20" fill="none"
-                  stroke="var(--margin-rule)" stroke-width="1.5"/>
-            <text x="36" y="196" fill="var(--margin-rule)"
-                  style="font:400 11px var(--mono)">generate</text>
-
-            <rect class="d-box" x="345" y="40" width="210" height="170"/>
-            <text class="d-title" x="363" y="70">relay</text>
-            <text class="d-sub"   x="363" y="94">/api/story</text>
-            <text class="d-sub"   x="363" y="148">holds the key</text>
-            <text class="d-sub"   x="363" y="168">holds the jobs</text>
-
-            <rect class="d-box-2" x="682" y="80" width="210" height="90"/>
-            <text class="d-title" x="700" y="118">the model</text>
-            <text class="d-sub"   x="700" y="142">ai.hackclub.com</text>
-
-            <text class="d-lbl" x="228" y="76">1. POST topic</text>
-            <path class="d-arrow" d="M222 88 L341 88" marker-end="url(#ah)"/>
-
-            <text class="d-lbl" x="228" y="128">2. job id (ms)</text>
-            <path class="d-arrow d-arrow-b" d="M341 140 L222 140" marker-end="url(#ah)"/>
-
-            <text class="d-lbl" x="228" y="182">3. poll / 4s</text>
-            <path class="d-arrow d-arrow-r" d="M222 194 L341 194" marker-end="url(#ah)"/>
-
-            <path class="d-arrow" d="M559 108 L678 108" marker-end="url(#ah)"/>
-            <text class="d-lbl" x="566" y="96">prompt</text>
-            <path class="d-arrow d-arrow-b" d="M678 152 L559 152" marker-end="url(#ah)"/>
-            <text class="d-lbl" x="566" y="172">story</text>
-
-            <text class="d-sub" x="8" y="250">every request completes in 3–50ms</text>
-          </svg>
-        </div>
-
-        <p>The document script never waits on the model. It fires a submit, and
-          the relay answers in milliseconds with a job id rather than a story:</p>
-
-        <figure class="code" data-lang="js">
-          <figcaption><span class="grow">httpdemo.js</span><button class="copy" type="button">Copy</button></figcaption>
-<pre><code class="lang-js">function submit_now() {
-  DOC.submitForm({
-    cURL: RELAY_URL + "#FDF",
-    cSubmitAs: submit_mode,
-    aFields: ["topic", "job"],
-    bEmpty: true
-  });
-}</code></pre>
-        </figure>
+        <p>Acrobat doens't allow for standard JSON responses, so we need to be a bit creative. 
+             Acrobat does however, support <code>FDF</code> responses, which is a format intended for PDF form data.
+       Thus when we send a response with <code>Content-Type: application/vnd.fdf</code>, Acrobat parses the FDF
+          and imports the values <strong>into our document</strong>
+          <img class="emoji" src="yay.png" alt="yay" width="22" height="22">.</p>
 
         <div class="callout">
           <p class="label">Note</p>
-          <p>At document level <code>this</code> is the <code>Doc</code>, which
-            is why the script opens with <code>var DOC = this;</code>. Upstream
-            linuxpdf reaches fields through <code>globalThis.getField()</code> —
-            that works in PDFium, but in Acrobat <code>getField</code> is a
-            <code>Doc</code> method and the global does not exist.</p>
+          <p>I did cook.</p>
         </div>
       </section>
 
       <section id="return-channel">
-        <h2>The return channel</h2>
+        <h2>So WTF is a FDF?</h2>
 
-        <p>An FDF file is a small container of field names and values. The relay
-          builds one by hand for every reply — three fields, every time:</p>
+        <p>An FDF file looks complicated, but deep down its super simple. It's a set of key-value pairs, that relate to form names and data respectively.</p>
 
         <figure class="code" data-lang="fdf">
-          <figcaption><span class="grow">the reply, unwrapped</span><button class="copy" type="button">Copy</button></figcaption>
 <pre><code class="lang-fdf">%FDF-1.2
+% an example FDF file
 1 0 obj
 &lt;&lt; /FDF &lt;&lt; /Fields [
 &lt;&lt; /T(status)   /V(OK - 1284 chars in 17s) &gt;&gt;
@@ -659,74 +598,24 @@ trailer
 %%EOF</code></pre>
         </figure>
 
-        <p>Two details in there are load-bearing. There is no <code>/F</code> or
-          <code>/UF</code> key — Adobe's Enhanced Security rules require its
-          absence for a document opened from the local filesystem. And only
-          <code>/Fields</code> injection is used: an FDF can also carry
-          <code>/JavaScript</code>, but Enhanced Security blocks that unless the
-          file sits in a privileged location, so nothing here depends on it.</p>
+        <p>
+              With that context, this code actually makes a bit more sense. <code>/T</code> values relate to the field name, and <code>/V</code>    values relate to the data.
+        </p>
 
-        <h3>Encoding the text</h3>
-
-        <p>Model output is full of em dashes and smart quotes, and the field's
-          font is WinAnsi. So the encoder emits a literal string
-          <code>(...)</code> when the text is pure ASCII — keeping the FDF
-          readable while debugging — and a UTF-16BE hex string
-          <code>&lt;feff...&gt;</code> otherwise, where the leading byte-order
-          mark is what identifies it as Unicode.</p>
-
-        <div class="callout warn">
-          <p class="label">Newlines are a trap</p>
-          <p>Acrobat's line separator inside a multiline field is a carriage
-            return, and it must be written as the two-character escape
-            <code>\r</code>. A raw CR byte inside a literal string is read by the
-            specification as <code>\n</code>, which silently changes the
-            separator.</p>
-        </div>
+        <p> It is also important to note that an FDF response can also carry
+          javascript, but Acrobat's security features block that unless the
+          file sits in a privileged location, so to make this a bit more portable nothing here depends on it.</p>
       </section>
 
       <section id="polling">
-        <h2>The polling loop</h2>
+        <h2>Polling???</h2>
 
-        <p>Acrobat will not hold a <code>submitForm</code> connection open for a
-          slow response. The first working version called the model inline, took
-          15–35 seconds, and Acrobat dropped the socket before the reply could be
-          written — the relay logged
-          <code>ConnectionResetError: [WinError 10054]</code> after returning
-          200, and the document showed nothing. There is no timeout setting to
-          raise.</p>
+        <p>Acrobat will not keep a <code>submitForm</code> connection open for a long time. The first working version took
+          15–35 seconds to respond
+          <img class="emoji" src="pf.png" alt="pf" width="22" height="22">, and Acrobat dropped the socket before the reply could be
+          written and sent so the document would just always show nothing.</p>
 
-        <p>So the document polls. It re-submits with the job id every four
-          seconds until the status line says the job is done:</p>
-
-        <figure class="code" data-lang="js">
-          <figcaption><span class="grow">httpdemo.js</span><button class="copy" type="button">Copy</button></figcaption>
-<pre><code class="lang-js">var POLL_INTERVAL = 4000; // ms between polls
-var POLL_LIMIT = 75;      // 75 * 4s = 5 minutes
-
-// the relay writes "OK - ..." when the story has arrived and
-// "relay error: ..." when it failed. anything else means keep waiting.
-function is_finished(status) {
-  return status.indexOf("OK -") === 0 || status.indexOf("relay error") === 0;
-}
-
-function schedule_poll(attempt) {
-  // app.setTimeOut takes a string of javascript, not a function
-  app.setTimeOut("try {poll_once(" + attempt + ")} catch (e) {app.alert(e)}",
-                 POLL_INTERVAL);
-}</code></pre>
-        </figure>
-
-        <div class="callout warn">
-          <p class="label">Never read a field straight after submitting</p>
-          <p>The FDF reply has not been imported at that point, so you read stale
-            text. The first version scheduled its opening poll only if the status
-            already said <code>WORKING</code> — which it never did that early. So
-            polling never started, and every click silently leaked a new job on
-            the relay while the document ignored the results. The first poll is
-            now scheduled unconditionally, and <code>is_finished()</code> decides
-            when to <em>stop</em>.</p>
-        </div>
+        <p>So I added job ids, and made the document poll. Now the inital request responds with an id, and later requests use the id to ask for the right response.</p>
 
         <p>There is also a <strong>Poll now</strong> button. If
           <code>app.setTimeOut</code> ever fails to fire in this context, that
@@ -755,7 +644,6 @@ function schedule_poll(attempt) {
           polls will not hit the same instance.</p>
 
         <figure class="code" data-lang="js">
-          <figcaption><span class="grow">api/story.js</span><button class="copy" type="button">Copy</button></figcaption>
 <pre><code class="lang-js">const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 const job = { state: "running", started: Date.now(), story: "", error: "" };
 await redis.set(`job:${id}`, job, { ex: JOB_TTL });
@@ -778,166 +666,10 @@ waitUntil(
         </div>
       </section>
 
-      <section id="model">
-        <h2>The model</h2>
 
-        <p>The default is <code>qwen/qwen3-32b</code>, measured at 13–20 seconds
-          per story. Speed is the reason for the choice, not quality: a Vercel
-          Hobby function is killed at 60 seconds and <code>waitUntil</code> work
-          dies with it, so anything slower leaves jobs that never finish.</p>
 
-        <div class="callout warn">
-          <p class="label">Reasoning models are a trap here</p>
-          <p>They burn 300–900 tokens thinking before writing a word, and take
-            anywhere from 16 seconds to over three minutes for the same prompt.
-            If <code>max_tokens</code> does not cover the thinking <em>as well
-            as</em> the story, the API returns
-            <code>finish_reason: "length"</code> with <code>content: null</code>
-            — no story, no error, nothing. That is why <code>MAX_TOKENS</code>
-            defaults to 3000 rather than the ~500 a 300-word story needs, and why
-            both relays raise a message naming this cause instead of failing on a
-            null.</p>
-        </div>
 
-        <p>Note also that a leading <code>~</code> on a model id, as in
-          <code>~deepseek/deepseek-v4-flash-latest</code>, is part of the id and
-          not a typo — it marks a floating alias on the proxy. Without it the API
-          answers <code>is not a valid model ID</code>.</p>
-
-        <div class="tw">
-          <table>
-            <thead>
-              <tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>HACKCLUB_AI_KEY</code></td><td>—</td><td>Required. The credential the relay holds.</td></tr>
-              <tr><td><code>HACKCLUB_AI_MODEL</code></td><td><code>qwen/qwen3-32b</code></td><td>Override the model.</td></tr>
-              <tr><td><code>HACKCLUB_AI_MAX_TOKENS</code></td><td><code>3000</code></td><td>Budget for thinking plus story.</td></tr>
-              <tr><td><code>HACKCLUB_AI_URL</code></td><td>Hack Club proxy</td><td>Override the endpoint.</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p>The prompt itself is fixed (<code>BASE_PROMPT</code>, defined in both
-          relays — keep the two copies in sync), plus your topic if you typed
-          one, plus a short random entropy token. That token exists because the
-          prompt asks the model to be random, and because it stops any layer in
-          between from serving a cached completion.</p>
-      </section>
-
-      <section id="local">
-        <h2>Run it locally</h2>
-
-        <figure class="code" data-lang="sh">
-          <figcaption><span class="grow">setup</span><button class="copy" type="button">Copy</button></figcaption>
-<pre><code class="lang-sh">python3 -m venv .venv
-.venv/Scripts/python.exe -m pip install -r requirements.txt
-
-cp .env.example .env    # put your key in HACKCLUB_AI_KEY</code></pre>
-        </figure>
-
-        <p><code>.env</code> is gitignored. A real environment variable overrides
-          the file, so CI and one-off overrides still work.</p>
-
-        <figure class="code" data-lang="sh">
-          <figcaption><span class="grow">two terminals</span><button class="copy" type="button">Copy</button></figcaption>
-<pre><code class="lang-sh"># terminal 1 - the relay
-.venv/Scripts/python.exe tools/dev_relay.py 8000
-
-# terminal 2 - a pdf pointed at it. note out/, not public/
-.venv/Scripts/python.exe gen_http_pdf.py out/slop.pdf local</code></pre>
-        </figure>
-
-        <p>Open <code>out/slop.pdf</code> in Acrobat, optionally type a topic, and
-          click <em>Generate</em>. The dev relay is stdlib-only and serves the
-          same <code>public/</code> directory Vercel does, so
-          <code>http://127.0.0.1:8000/</code> shows this very page. Routes are
-          <code>/</code>, <code>/slop.pdf</code>, <code>/crossdomain.xml</code>
-          and <code>POST /api/story</code>. Static files are read off disk per
-          request, so a rebuild needs no restart.</p>
-
-        <div class="callout warn">
-          <p class="label">Keep the two builds straight</p>
-          <p>The relay URL is baked in at generation time. A PDF built with
-            <code>local</code> will keep trying <code>127.0.0.1</code> on whoever
-            opens it.</p>
-        </div>
-
-        <div class="tw">
-          <table>
-            <thead>
-              <tr><th scope="col">File</th><th scope="col">Talks to</th><th scope="col">Purpose</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>public/slop.pdf</code></td><td><code>https://slop.alexvd.dev/api/story</code></td><td>Committed, deployed</td></tr>
-              <tr><td><code>out/slop.pdf</code></td><td><code>http://127.0.0.1:8000/api/story</code></td><td>Local testing, gitignored</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="callout tip">
-          <p class="label">Use 127.0.0.1, not localhost</p>
-          <p>On Windows <code>localhost</code> resolves to <code>::1</code>
-            first. With the dev relay bound to IPv4 only, every request pays a ~2
-            second fallback penalty. The same relay over <code>127.0.0.1</code>
-            answers in 3ms.</p>
-        </div>
-      </section>
-
-      <section id="deploy">
-        <h2>Deploying</h2>
-
-        <p>The public build runs on Vercel at
-          <a href="https://slop.alexvd.dev">slop.alexvd.dev</a>.</p>
-
-        <ol class="body">
-          <li>Add the <strong>Upstash Redis</strong> (or Vercel KV) integration.
-            It sets <code>KV_REST_API_URL</code> / <code>KV_REST_API_TOKEN</code>;
-            the code also accepts the <code>UPSTASH_REDIS_REST_URL</code> pair.</li>
-          <li>Set <code>HACKCLUB_AI_KEY</code> in the project's environment
-            variables.</li>
-          <li>Point the domain at the project.</li>
-        </ol>
-
-        <p>Rebuild the PDF after any change to <code>httpdemo.js</code> or
-          <code>gen_http_pdf.py</code>, and commit it. It is a build artefact,
-          but Vercel deploys from git and has no Python toolchain here:</p>
-
-        <figure class="code" data-lang="sh">
-          <figcaption><span class="grow">rebuild before committing</span><button class="copy" type="button">Copy</button></figcaption>
-<pre><code class="lang-sh">.venv/Scripts/python.exe gen_http_pdf.py public/slop.pdf</code></pre>
-        </figure>
-
-        <div class="callout warn">
-          <p class="label">Check the production branch</p>
-          <p>Vercel's production branch defaults to the repository's default
-            branch. Make sure that is the branch this code actually lives on, or
-            the deploy will serve nothing and <code>/api/story</code> will
-            404.</p>
-        </div>
-      </section>
-
-      <section id="layout">
-        <h2>Project layout</h2>
-
-        <div class="tw">
-          <table>
-            <thead>
-              <tr><th scope="col">Path</th><th scope="col">What it is</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>gen_http_pdf.py</code></td><td>Builds the PDF</td></tr>
-              <tr><td><code>pdfform.py</code></td><td>AcroForm widget helpers</td></tr>
-              <tr><td><code>httpdemo.js</code></td><td>The document-level JavaScript</td></tr>
-              <tr><td><code>tools/dev_relay.py</code></td><td>Local relay, stdlib only</td></tr>
-              <tr><td><code>api/story.js</code></td><td>The deployed relay (Vercel)</td></tr>
-              <tr><td><code>public/</code></td><td>This page, the policy file, the built PDF</td></tr>
-              <tr><td><code>vercel.json</code></td><td><code>maxDuration</code> and the policy file's Content-Type</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
+      
       <section id="pitfalls">
         <h2>What silently breaks it</h2>
 
@@ -950,7 +682,6 @@ cp .env.example .env    # put your key in HACKCLUB_AI_KEY</code></pre>
           <code>vercel.json</code> overrides it. Verify after every deploy:</p>
 
         <figure class="code" data-lang="sh">
-          <figcaption><span class="grow">verify the policy file</span><button class="copy" type="button">Copy</button></figcaption>
 <pre><code class="lang-sh">curl -i https://slop.alexvd.dev/crossdomain.xml</code></pre>
         </figure>
 
@@ -1013,25 +744,22 @@ cp .env.example .env    # put your key in HACKCLUB_AI_KEY</code></pre>
       <section id="credits">
         <h2>Credits &amp; licence</h2>
 
-        <p>Built by <strong>Alex Van Doren</strong>, one of the developers behind
-          Stardance — as something to send to friends on the way to Brown.</p>
+        <p>Built by me, <strong><a href="https://alexvd.dev/">Alex Van Doren</a></strong>, one of the developers behind
+          <a href="https://stardance.hackclub.com/sloppdf">Hack Club's Stardance Challenge</a>, and super cool sailor, because I thought it would be stupid, and also because I wanted to have something funny to show my new friends at Brown.</p>
 
-        <p>This is a fork of
+        <p>BTW I made this as a fork of
           <a href="https://github.com/ading2210/linuxpdf">linuxpdf</a> by
-          <a href="https://github.com/ading2210/">ading2210</a>, which runs an
-          entire RISC-V Linux emulator inside a PDF using the same tricks.
+          <a href="https://github.com/ading2210/">ading2210</a>, which is super cool and runs an
+          entire RISC-V Linux emulator inside a PDF using similar tricks (exploiting pdf javascript).
           <code>pdfform.py</code> is derived from that project's
-          <code>gen_pdf.py</code>. It is worth your time. See also
-          <a href="https://github.com/ading2210/doompdf">DoomPDF</a>, and
+          <code>gen_pdf.py</code>. It is 100% worth your time and it was actually made by a High Schooler for a previous Hack Club program. See also
+          <a href="https://github.com/ading2210/doompdf">DoomPDF</a> (also by ading2210), and
           <a href="https://bellard.org/tinyemu/">TinyEMU</a> by Fabrice Bellard,
           which linuxpdf's emulator is based on.</p>
 
-        <p>Licensed <strong>GNU GPL v3</strong>, inherited from linuxpdf.
+        <p>Licensed <strong><a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3</a></strong>, inherited from linuxpdf.
           Copyright © 2026 vandorena. Derived from ading2210/linuxpdf, copyright
           © 2025 ading2210.</p>
-
-        <p class="foot">one static html file &middot; no dependencies &middot; no
-          build step &middot; no tracking</p>
       </section>
 
     </main>
@@ -1081,44 +809,6 @@ cp .env.example .env    # put your key in HACKCLUB_AI_KEY</code></pre>
   }, { rootMargin: "-90px 0px -55% 0px", threshold: 0 });
 
   sections.forEach(function (s) { observer.observe(s); });
-
-  // ---------------------------------------------------------- copy button
-  function copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(text);
-    }
-    // http on a lan address has no clipboard api - fall back to a scratch node
-    return new Promise(function (resolve, reject) {
-      var ta = document.createElement("textarea");
-      ta.value = text;
-      ta.setAttribute("readonly", "");
-      ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
-      document.body.appendChild(ta);
-      ta.select();
-      var ok = false;
-      try { ok = document.execCommand("copy"); } catch (e) {}
-      document.body.removeChild(ta);
-      ok ? resolve() : reject();
-    });
-  }
-
-  document.querySelectorAll("figure.code").forEach(function (fig) {
-    var btn = fig.querySelector(".copy");
-    var code = fig.querySelector("code");
-    if (!btn || !code) return;
-    btn.addEventListener("click", function () {
-      copyText(code.textContent).then(function () {
-        btn.textContent = "Copied";
-        btn.dataset.done = "1";
-      }, function () {
-        btn.textContent = "Ctrl+C";
-      });
-      setTimeout(function () {
-        btn.textContent = "Copy";
-        delete btn.dataset.done;
-      }, 1800);
-    });
-  });
 
   // ----------------------------------------------------- syntax highlight
   // a deliberately small tokeniser. every pattern below uses non-capturing
