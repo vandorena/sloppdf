@@ -581,11 +581,11 @@ td code{white-space:nowrap}
       <section id="return-channel">
         <h2>So WTF is a FDF?</h2>
 
-        <p>An FDF file is a small container of field names and values. The relay
-          builds one by hand for every reply — three fields, every time:</p>
+        <p>An FDF file looks complicated, but deep down its super simple. It's a set of key-value pairs, that relate to form names and data respectively.</p>
 
         <figure class="code" data-lang="fdf">
 <pre><code class="lang-fdf">%FDF-1.2
+% an example FDF file
 1 0 obj
 &lt;&lt; /FDF &lt;&lt; /Fields [
 &lt;&lt; /T(status)   /V(OK - 1284 chars in 17s) &gt;&gt;
@@ -598,30 +598,13 @@ trailer
 %%EOF</code></pre>
         </figure>
 
-        <p>Two details in there are load-bearing. There is no <code>/F</code> or
-          <code>/UF</code> key — Adobe's Enhanced Security rules require its
-          absence for a document opened from the local filesystem. And only
-          <code>/Fields</code> injection is used: an FDF can also carry
-          <code>/JavaScript</code>, but Enhanced Security blocks that unless the
-          file sits in a privileged location, so nothing here depends on it.</p>
+        <p>
+              With that context, this code actually makes a bit more sense. <code>/T</code> values relate to the field name, and <code>/V</code>    values relate to the data.
+        </p>
 
-        <h3>Encoding the text</h3>
-
-        <p>Model output is full of em dashes and smart quotes, and the field's
-          font is WinAnsi. So the encoder emits a literal string
-          <code>(...)</code> when the text is pure ASCII — keeping the FDF
-          readable while debugging — and a UTF-16BE hex string
-          <code>&lt;feff...&gt;</code> otherwise, where the leading byte-order
-          mark is what identifies it as Unicode.</p>
-
-        <div class="callout warn">
-          <p class="label">Newlines are a trap</p>
-          <p>Acrobat's line separator inside a multiline field is a carriage
-            return, and it must be written as the two-character escape
-            <code>\r</code>. A raw CR byte inside a literal string is read by the
-            specification as <code>\n</code>, which silently changes the
-            separator.</p>
-        </div>
+        <p> It is also important to note that an FDF response can also carry
+          javascript, but Acrobat's security features block that unless the
+          file sits in a privileged location, so to make this a bit more portable nothing here depends on it.</p>
       </section>
 
       <section id="polling">
