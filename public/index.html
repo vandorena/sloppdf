@@ -617,128 +617,19 @@ trailer
 
         <p>So I added job ids, and made the document poll. Now the inital request responds with an id, and later requests use the id to ask for the right response.</p>
 
-        <p>There is also a <strong>Poll now</strong> button. If
-          <code>app.setTimeOut</code> ever fails to fire in this context, that
-          button still retrieves the result — and it is the quickest way to tell
-          the two failure modes apart. The <code>job</code> field is left visible
-          for the same reason: if this breaks, whether the id survived the FDF
-          import is the first thing to check.</p>
+        <p>There is also a <strong>Poll now</strong> button. In case the reponse isn't available yet.</p>
       </section>
 
       <section id="relay">
-        <h2>Why the relay exists</h2>
+        <h2>Why relay?</h2>
 
-        <p>Two reasons, both unavoidable.</p>
+        <p>I didn't want to hit Qwen directly for two reasons, other than the fact that would be boring af:</p>
 
-        <h3>It holds the key</h3>
-        <p>Anyone who opens a PDF can read every byte of it, so a key embedded in
-          the document is a published key. The document just asks for a story;
-          the relay holds the credential. The proxy hop is not only a limitation
-          — it is the thing that makes distributing the file safe.</p>
+        <h3>1. I didn't want to leak my api keys</h3>
+        <p>Anyone who has the pdf can read all of it's code, I didn't wanna be the idiot to put my secrets in the frontend. By adding in the relay I can protect my keys + change stuff on the backend easily.</p>
 
-        <h3>It answers instantly</h3>
-        <p>The relay never calls the model from the request handler. It writes a
-          job to Redis, replies with the id, and continues generating after the
-          response has been sent via <code>waitUntil()</code>. Job state lives in
-          Redis rather than memory because Vercel functions are stateless and two
-          polls will not hit the same instance.</p>
-
-        <figure class="code" data-lang="js">
-<pre><code class="lang-js">const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
-const job = { state: "running", started: Date.now(), story: "", error: "" };
-await redis.set(`job:${id}`, job, { ex: JOB_TTL });
-
-waitUntil(
-  generateStory(topic)
-    .then((story) =&gt; redis.set(`job:${id}`,
-      { ...job, state: "done", story }, { ex: JOB_TTL }))
-    .catch((e) =&gt; redis.set(`job:${id}`,
-      { ...job, state: "error", error: e.message }, { ex: JOB_TTL }))
-);</code></pre>
-        </figure>
-
-        <div class="callout">
-          <p class="label">Note</p>
-          <p>Errors are shown, not swallowed. A missing key or an upstream
-            failure comes back as an FDF that fills <code>status</code> with the
-            reason, so the document tells you what went wrong instead of sitting
-            blank.</p>
-        </div>
-      </section>
-
-
-
-
-      
-      <section id="pitfalls">
-        <h2>What silently breaks it</h2>
-
-        <h3>The policy file, and its Content-Type</h3>
-        <p>A PDF opened from disk has <strong>no origin</strong>, so Acrobat
-          treats every response as cross-domain and drops it unless the host
-          explicitly permits it. Vercel would serve <code>.xml</code> as
-          <code>application/xml</code>; Adobe expects
-          <code>text/x-cross-domain-policy</code>, which is why
-          <code>vercel.json</code> overrides it. Verify after every deploy:</p>
-
-        <figure class="code" data-lang="sh">
-<pre><code class="lang-sh">curl -i https://slop.alexvd.dev/crossdomain.xml</code></pre>
-        </figure>
-
-        <h3>The Required flag</h3>
-        <p><code>/Ff</code> flags are <strong>1-based bit positions</strong>, so
-          bit 1 is value <code>1</code> and bit 2 is value <code>2</code>:</p>
-
-        <div class="tw">
-          <table>
-            <thead>
-              <tr><th scope="col">Bit</th><th scope="col">Value</th><th scope="col">Flag</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>1</td><td><code>1</code></td><td>ReadOnly</td></tr>
-              <tr><td>2</td><td><code>2</code></td><td><strong>Required</strong></td></tr>
-              <tr><td>13</td><td><code>4096</code></td><td>Multiline</td></tr>
-              <tr><td>17</td><td><code>65536</code></td><td>Pushbutton</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p>Writing <code>Ff = 2</code> intending ReadOnly actually marks the
-          field <strong>Required</strong>, and Acrobat then refuses to submit the
-          form at all — <em>"At least one required field was empty."</em> This is
-          easy to miss because Chrome ignores it entirely: upstream linuxpdf set
-          <code>Ff = 2</code> on all 310 of its fields and nothing ever
-          complained, since that document never submits a form.</p>
-
-        <h3>The missing AcroForm dictionary</h3>
-        <p>Upstream linuxpdf emits no <code>/AcroForm</code>. Chrome tolerates
-          that and scavenges widgets off the page's <code>/Annots</code>; Acrobat
-          resolves <code>getField()</code> names <strong>only</strong> through
-          <code>/AcroForm /Fields</code>, so every field was invisible to
-          JavaScript there. Three things bite when fixing it with pdfrw:</p>
-
-        <ul class="body">
-          <li><code>PdfWriter.addpage()</code> resets
-            <code>writer._trailer</code>, so <code>/AcroForm</code> must be
-            attached <em>after</em> <code>addpage()</code> or it is silently
-            discarded.</li>
-          <li>pdfrw has no boolean type — <code>NeedAppearances=True</code>
-            serialises as <code>True</code>, which is invalid PDF. Use
-            <code>PdfObject("true")</code>.</li>
-          <li>Fields must be <code>indirect = True</code>, or pdfrw duplicates
-            each one that appears in both <code>/Annots</code> and
-            <code>/Fields</code> — a <code>log.warning</code> only — producing
-            two widgets sharing one name.</li>
-        </ul>
-
-        <h3>Generation must fit the time limit</h3>
-        <p>Vercel Hobby caps an invocation at 60 seconds, and
-          <code>waitUntil</code> work dies with the function. Hence the fast
-          default model and <code>JOB_DEADLINE = 55</code>, which reports a clear
-          error rather than letting the document poll for five minutes.</p>
-
-        <p>The full internals write-up, including everything above in more
-          detail, lives in <code>docs/http-demo.md</code> in the repository.</p>
+        <h3>2. Like me using my cellphone, it answers quickly.</h3>
+        <p>LLM api calls take a while.. Like longer than I could keep the request going, so I needed something that responded quicker.</p>
       </section>
 
       <section id="credits">
