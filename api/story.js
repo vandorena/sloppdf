@@ -22,36 +22,12 @@
 //  UPSTASH_REDIS_REST_URL / ..._TOKEN       set by the upstash integration
 //  HACKCLUB_AI_MODEL, HACKCLUB_AI_MAX_TOKENS, HACKCLUB_AI_URL   optional
 
-import { Redis } from "@upstash/redis";
 import { waitUntil } from "@vercel/functions";
-
-const DEFAULT_AI_URL = "https://ai.hackclub.com/proxy/v1/chat/completions";
-
-//a fast non-reasoning model on purpose. the reasoning models this proxy offers
-//take 15-180s, and a hobby-plan function is killed at 60s - a slow generation
-//would be cut off mid-flight and the job would never complete. override with
-//HACKCLUB_AI_MODEL if you move to a plan with a longer ceiling.
-const DEFAULT_AI_MODEL = "qwen/qwen3-32b";
-
-//keep in sync with tools/dev_relay.py
-const BASE_PROMPT =
-  "Think of something you haven't thought of before. Try your best to be random. " +
-  "Try to decide if your text is like the number 7 or not. Then decide a story. " +
-  "Something obscene. Under 300 words. Make it weird and goofy, but not " +
-  "offputting. It should feel sloppy, but not too sloppy.";
+import { redisClient, generateStory, refillPool, POOL_KEY } from "./_lib/relay.js";
 
 const MAX_TOPIC_LEN = 200;
-const DEFAULT_MAX_TOKENS = 3000;
 const JOB_TTL = 900;      //seconds a job survives in redis
 const JOB_DEADLINE = 55;  //seconds before a running job is declared dead
-
-//the vercel kv and upstash integrations export different names for the same pair
-function redisClient() {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) throw new Error("no redis credentials in the environment");
-  return new Redis({ url, token });
-}
 
 // ---------------------------------------------------------------- fdf encoding
 
@@ -140,57 +116,6 @@ function parseSubmission(body, contentType) {
   return values;
 }
 
-// ------------------------------------------------------------------ generation
-
-function buildPrompt(topic) {
-  let prompt = BASE_PROMPT;
-  if (topic) prompt += `\n\nWork this topic in somewhere: ${topic}`;
-  //the model is asked to be random, so give it something to be random from -
-  //this also stops any layer in between serving a cached completion.
-  prompt += `\n\n(entropy: ${crypto.randomUUID().slice(0, 8)} - ignore this token, ` +
-            `it only exists to vary your output)`;
-  return prompt;
-}
-
-async function generateStory(topic) {
-  const key = process.env.HACKCLUB_AI_KEY;
-  if (!key) throw new Error("HACKCLUB_AI_KEY is not set");
-
-  const resp = await fetch(process.env.HACKCLUB_AI_URL || DEFAULT_AI_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer " + key,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.HACKCLUB_AI_MODEL || DEFAULT_AI_MODEL,
-      messages: [{ role: "user", content: buildPrompt(topic) }],
-      temperature: 1.0,
-      max_tokens: Number(process.env.HACKCLUB_AI_MAX_TOKENS) || DEFAULT_MAX_TOKENS,
-    }),
-  });
-
-  if (!resp.ok) {
-    throw new Error(`upstream ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
-  }
-
-  const body = await resp.json();
-  const choice = body.choices[0];
-  const story = (choice.message.content || "").trim();
-
-  //a reasoning model that exhausts max_tokens while still thinking returns
-  //finish_reason=length with a null content, which is otherwise a baffling
-  //failure - name it so the pdf's status field says something useful.
-  if (!story) {
-    if (choice.finish_reason === "length") {
-      throw new Error("model spent its whole token budget on reasoning and never " +
-                      "wrote the story - raise HACKCLUB_AI_MAX_TOKENS");
-    }
-    throw new Error(`model returned no content (finish_reason=${choice.finish_reason})`);
-  }
-  return story;
-}
-
 // ------------------------------------------------------------------------ jobs
 
 //the pdf's document script polls on the "WORKING" prefix, so these strings are
@@ -223,6 +148,25 @@ function jobFields(id, job) {
   };
 }
 
+//stores a running job, kicks off generation in the background, and returns
+//[id, job] so the caller can render the just-started state without a second
+//redis round trip.
+async function startJob(redis, topic) {
+  const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  const job = { state: "running", started: Date.now(), story: "", error: "" };
+  await redis.set(`job:${id}`, job, { ex: JOB_TTL });
+
+  waitUntil(
+    generateStory(topic)
+      .then((story) => redis.set(`job:${id}`,
+        { ...job, state: "done", story }, { ex: JOB_TTL }))
+      .catch((e) => redis.set(`job:${id}`,
+        { ...job, state: "error", error: e.message }, { ex: JOB_TTL }))
+  );
+
+  return [id, job];
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).send("POST only\n");
@@ -241,22 +185,22 @@ export default async function handler(req, res) {
     if (jobId) {
       //a poll
       values = jobFields(jobId, await redis.get(`job:${jobId}`));
+    } else if (!topic) {
+      //a fresh request with no topic - these are interchangeable, so skip the
+      //job/poll dance entirely and hand back a story that's already sitting in
+      //redis. LPOP is atomic, so two blank-topic requests racing each other
+      //never get the same story.
+      const cached = await redis.lpop(POOL_KEY);
+      if (cached) {
+        waitUntil(refillPool(redis));
+        values = { response: cached, status: `OK - ${cached.length} chars (prerendered)`, job: "" };
+      } else {
+        //pool's dry - fall back to a normal job, and try to refill for next time
+        waitUntil(refillPool(redis));
+        values = jobFields(...await startJob(redis, topic));
+      }
     } else {
-      //a fresh request. store the job, answer immediately, and let generation
-      //continue after the response has been sent.
-      const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
-      const job = { state: "running", started: Date.now(), story: "", error: "" };
-      await redis.set(`job:${id}`, job, { ex: JOB_TTL });
-
-      waitUntil(
-        generateStory(topic)
-          .then((story) => redis.set(`job:${id}`,
-            { ...job, state: "done", story }, { ex: JOB_TTL }))
-          .catch((e) => redis.set(`job:${id}`,
-            { ...job, state: "error", error: e.message }, { ex: JOB_TTL }))
-      );
-
-      values = jobFields(id, job);
+      values = jobFields(...await startJob(redis, topic));
     }
   } catch (e) {
     values = { response: "", status: `relay error: ${e.message}`, job: "" };

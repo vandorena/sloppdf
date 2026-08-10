@@ -89,6 +89,41 @@ Override with `HACKCLUB_AI_MODEL` or `HACKCLUB_AI_MAX_TOKENS`. `POLL_LIMIT` in
 `httpdemo.js` covers five minutes, so a slow model still works against the local
 Python relay, which has no time ceiling — just not on Vercel Hobby.
 
+## The prerendered pool
+
+A blank topic is the common case, and every blank-topic request asks for the
+same thing — so instead of making it wait through the job/poll dance like a
+topic-specific request, both relays keep a small stock of pregenerated stories
+and hand one out immediately, no polling required. `status` comes back
+`OK - ... (prerendered)` on the very first response instead of `WORKING`.
+
+Requests that include a topic are unaffected — the pool only ever holds
+generic (blank-topic) stories, so a topic always goes through the normal
+job/poll path.
+
+**Refill-on-consume, not a scheduler.** Every blank-topic request — whether it
+hit the pool or found it empty — kicks off exactly one background generation
+to top the pool back up (capped at `POOL_TARGET = 30`, kept in sync between
+`tools/dev_relay.py` and `api/_lib/relay.js`). There is no cron job; the pool
+is self-sustaining as long as blank-topic traffic keeps flowing. If it runs
+dry, the request just falls back to a normal job — slower, but correct.
+
+**Storage differs by relay, same contract.** The dev relay keeps `POOL` as an
+in-process list, so it starts empty on every restart — `start_pool_warmup()`
+spawns a few background workers on startup to fill it before anyone asks.
+The production relay stores the pool as a redis list (`POOL_KEY =
+"story-pool"`) shared across invocations, since Vercel functions have no
+persistent memory between requests. A fresh redis also starts empty, and
+organic traffic would take dozens of real requests to fill it one at a time —
+run `node scripts/seed-pool.mjs` once against it instead (needs
+`HACKCLUB_AI_KEY` and the redis credentials in `.env`/`.env.local`, same as
+the deployed function).
+
+`api/_lib/relay.js` exists so `api/story.js` and `scripts/seed-pool.mjs` share
+one `generateStory`/`redisClient` implementation rather than drifting apart —
+Vercel excludes underscore-prefixed paths under `api/` from routing, so it's
+not itself an endpoint.
+
 ## Setup
 
 ```sh
