@@ -248,6 +248,59 @@ def reap_jobs():
     for key in [k for k, v in JOBS.items() if now - v["started"] > JOB_TTL]:
       del JOBS[key]
 
+#blank topic stories are interchangeable, so instead of making that request wait
+#through the job/poll dance like every other one, keep a small stock of
+#pregenerated stories on hand and hand one out instantly. keep in sync with
+#POOL_KEY/POOL_TARGET in api/_lib/relay.js.
+POOL_TARGET = 30
+POOL_LOCK = threading.Lock()
+POOL = []
+#how many refill chains run at once during startup warmup. refill-on-consume
+#only ever needs one at a time, so this only matters for filling an empty pool
+#quickly without hammering the api with 30 concurrent requests.
+POOL_WARMUP_WORKERS = 3
+
+def pop_pool():
+  with POOL_LOCK:
+    return POOL.pop(0) if POOL else None
+
+#generates and appends exactly one story, unless the pool is already full.
+#returns whether it generated one, so a caller can loop this until the pool is
+#topped off without needing to track counts itself.
+def refill_pool_once():
+  with POOL_LOCK:
+    if len(POOL) >= POOL_TARGET:
+      return False
+  try:
+    story = generate_story("")
+  except Exception as e:
+    log(f"  pool: refill failed: {e}")
+    return False
+  with POOL_LOCK:
+    POOL.append(story)
+    n = len(POOL)
+  log(f"  pool: +1 story ({n}/{POOL_TARGET})")
+  return True
+
+def refill_pool_worker():
+  while refill_pool_once():
+    pass
+
+#fire-and-forget: spawn one worker that keeps generating until the pool is
+#full, then exits on its own. called after every blank-topic request (hit or
+#miss) - if a worker from a previous call is already running, the pool-size
+#check in refill_pool_once just means the extra threads exit immediately
+#instead of overfilling it.
+def refill_pool_async():
+  threading.Thread(target=refill_pool_worker, daemon=True).start()
+
+def start_pool_warmup():
+  if not AI_KEY:
+    return
+  log(f"  pool: warming up to {POOL_TARGET} stories with {POOL_WARMUP_WORKERS} workers...")
+  for _ in range(POOL_WARMUP_WORKERS):
+    refill_pool_async()
+
 #the pdf's document script polls on the "WORKING" prefix, so these strings are
 #part of the contract - see poll_result() in httpdemo.js.
 def job_fields(job_id):
@@ -311,8 +364,23 @@ class Handler(BaseHTTPRequestHandler):
     log(f"  raw body: {body[:300]!r}")
 
     reap_jobs()
-    #an empty job means "this is a fresh request"; otherwise the pdf is polling
-    values = job_fields(job_id if job_id else start_job(topic))
+    if job_id:
+      #polling an existing job
+      values = job_fields(job_id)
+    elif not topic:
+      #fresh request, blank topic - these are interchangeable, so skip the
+      #job/poll dance and hand back a story that's already generated.
+      cached = pop_pool()
+      if cached is not None:
+        refill_pool_async()
+        values = {"response": cached,
+                  "status": f"OK - {len(cached)} chars (prerendered)", "job": ""}
+      else:
+        #pool's dry - fall back to a normal job, and try to catch up for next time
+        refill_pool_async()
+        values = job_fields(start_job(topic))
+    else:
+      values = job_fields(start_job(topic))
 
     payload = build_fdf(values)
     log(f"  replying {len(payload)} bytes, status={values['status']!r}")
@@ -327,4 +395,5 @@ if __name__ == "__main__":
   if not AI_KEY:
     log("WARNING: HACKCLUB_AI_KEY is not set - requests will return an error")
   log(f"relay on http://localhost:{port}  (POST /api/story, model {AI_MODEL})")
+  start_pool_warmup()
   ThreadingHTTPServer(("", port), Handler).serve_forever()
