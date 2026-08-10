@@ -259,6 +259,16 @@ section + section{margin-top:var(--line)}
    shadow and the peeled corner read as space. One whole band back, so the
    ruling underneath is unaffected. */
 #requirements{margin-top:0}
+/* shifted up 2 ruled lines from the default section gap */
+#how-it-works{margin-top:calc(var(--line) * -1)}
+/* shifted up 1 ruled line from the default section gap */
+#return-channel{margin-top:0}
+/* shifted up 2 ruled lines from the default section gap */
+#polling{margin-top:calc(var(--line) * -1)}
+/* shifted up 2 ruled lines from the default section gap */
+#relay{margin-top:calc(var(--line) * -1)}
+/* shifted up 2 ruled lines from the default section gap */
+#credits{margin-top:calc(var(--line) * -1)}
 /* A heading is set larger than the body, so its baseline sits lower in an
    identical line box. It takes one whole band of padding to keep the block a
    multiple of --line, then a visual nudge - which costs no height - to drop
@@ -301,7 +311,7 @@ ol.body li::marker{color:var(--muted);font-family:var(--mono);font-size:14px}
    code, tables and the diagram read as slips pasted onto the page. borders
    are drawn with box-shadow so they add no height and never break the grid. */
 code{
-  font-family:var(--mono);font-size:.82em;
+  font-family:var(--mono);font-size:.82em;line-height:1;
   background:var(--slip);
   box-shadow:0 0 0 1px var(--slip-edge);
   padding:0 .3em;
@@ -579,7 +589,7 @@ td code{white-space:nowrap}
       </section>
 
       <section id="return-channel">
-        <h2>So WTF is a FDF?</h2>
+        <h2>So WTF is FDF?</h2>
 
         <p>An FDF file looks complicated, but deep down its super simple. It's a set of key-value pairs, that relate to form names and data respectively.</p>
 
